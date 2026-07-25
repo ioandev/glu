@@ -1,23 +1,19 @@
 name: Publish
 
-# Build + push both tiers to GHCR, tests-gated and all-or-nothing, then deploy.
+# Build + push both tiers to GHCR, tests-gated and all-or-nothing. Publish-only:
+# this workflow does NOT deploy. The server is updated out of band (pull +
+# `docker compose up -d` on the box; see server-2/glu), so there is no SSH step.
 #
 # Triggers:
-#   push to main             → continuous dev image: :edge (moving) + :sha-<short> (immutable)
-#   workflow_dispatch        → same, for the manual go-live run
+#   workflow_dispatch        → continuous dev image: :edge (moving) + :sha-<short> (immutable)
 #   GitHub Release published → versioned: :X.Y.Z + :X.Y (+ :latest iff highest stable),
 #                              or :X.Y.Z-rc.N + :next for a pre-release Release
+#   push to main (commented) → same as dispatch; uncomment to publish :edge on every push
 #
 # Flow: `tests` → `build` (each tier × platform, pushes layers BY DIGEST, no
 # tags) → `merge` (assembles the multi-arch manifest and applies the human
-# tags) → `deploy` → `smoke`. Nothing is tagged or visible unless every test AND
-# every per-platform build succeeded, so a single failure publishes nothing.
-#
-# **Phase B of ADR 16 is NOT YET ACTIVATED**: the `push` trigger stays commented
-# until the server is provisioned (deploy/SERVER.md) and the three SSH secrets
-# are set. To activate, uncomment it. The `release` trigger is live because a
-# Release only ever *publishes* — `deploy` is skipped for release events, so it
-# cannot touch the server (see the deploy job's `if`).
+# tags). Nothing is tagged or visible unless every test AND every per-platform
+# build succeeded, so a single failure publishes nothing.
 on:
   workflow_dispatch:
   release:
@@ -26,10 +22,9 @@ on:
   #   branches: [main]
 
 concurrency:
-  # Deploys are serialised — never let two runs race the same server. In-flight
-  # runs are NOT cancelled, for either event: a half-finished deploy is worse
-  # than a slow one, and a release must never be cancelled mid-publish.
-  # (zantiflow cancels superseded main builds; it has no deploy stage to guard.)
+  # Serialise publish runs on the same ref so two never race the same tags.
+  # In-flight runs are NOT cancelled: a Release must never be cancelled
+  # mid-publish, and a half-pushed manifest is worse than a slow one.
   group: publish-${{ github.ref }}
   cancel-in-progress: false
 
@@ -138,13 +133,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      # Matrix legs overwrite each other's job outputs, but both derive the
-      # same value from GITHUB_SHA, so this is unambiguous whichever leg
-      # reports it last. Computed rather than taken from metadata-action's
-      # `version`, which changes meaning per event (:edge on a push, the semver
-      # on a release) — `deploy` always wants the immutable commit tag.
-      tag: ${{ steps.pin.outputs.tag }}
     strategy:
       fail-fast: false
       matrix:
@@ -167,10 +155,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute deploy pin
-        id: pin
-        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       # :latest must track the newest STABLE release only — never a pre-release,
       # never a backport (a v1.5.1 Release published while v2.x exists).
@@ -201,9 +185,12 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            # release version, from the Release's tag (metadata-action skips :X.Y for pre-releases):
+            # release version, from the Release's tag. The sliding :X.Y and :X
+            # tags follow the newest release on their line; metadata-action skips
+            # both for a pre-release, so v0.1.0-rc.1 only ever tags its full version.
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             # continuous, from a main push / manual dispatch:
             type=edge,branch=main
             type=sha,prefix=sha-,format=short
@@ -221,66 +208,3 @@ jobs:
 
       - name: Inspect
         run: docker buildx imagetools inspect ${{ env.IMAGE_BASE }}-${{ matrix.tier }}:${{ steps.meta.outputs.version }}
-
-  # Continuous deploy from main stays the model (ADR 16) — a Release publishes
-  # channels, it does not move the server. Deploying a backport Release would
-  # otherwise walk prod backwards.
-  deploy:
-    needs: merge
-    if: github.event_name != 'release'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Pull and restart on ioan.dev
-        uses: appleboy/ssh-action@v1
-        env:
-          # The immutable tag this run just built and tested. compose falls back
-          # to `:edge` when it is unset, so a manual `docker compose up -d` on
-          # the box still works — but the automated deploy always converges on
-          # the exact artifact the smoke job is about to check, and `docker
-          # compose config` on the server shows which one that is.
-          GLU_TAG: ${{ needs.merge.outputs.tag }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          envs: GLU_TAG
-          script: |
-            set -euo pipefail
-            cd /srv/glu
-            export GLU_TAG
-            docker compose pull
-            docker compose up -d
-
-  # The promise ADR 09 made: the same suite, pointed at production.
-  smoke:
-    needs: deploy
-    runs-on: ubuntu-latest
-    # The e2e suite lives in the web package (ADR 09).
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      # Only the @smoke-tagged subset, and only one browser: running all four
-      # projects against prod on every push is minutes of CI for no added
-      # confidence (ADR 16). The full matrix stays the pre-merge gate.
-      - name: Smoke the deployed site
-        env:
-          E2E_BASE_URL: https://ioan.dev/glu
-        run: npx playwright test --project=chromium --grep @smoke
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: smoke-report
-          path: |
-            web/playwright-report/
-            web/test-results/
-          retention-days: 7
