@@ -15,8 +15,10 @@
   allowlists both ids it reads** (security audit F-2/F-10, ADR 16 amendment).
   This ADR's required inline script is one of the two that ADR 16's
   `script-src 'self'` would have blocked; `ChromeBootstrap` now accepts a
-  `nonce` prop and puts it on both the `<style>` and the `<script>`.
-  Separately, the script validated `chromeThemeId` against the chrome
+  `nonce` prop and puts it on both the `<style>` and the `<script>` — each with
+  `suppressHydrationWarning`, because a header-delivered CSP blanks the `nonce`
+  attribute in the DOM and hydration reads that as a mismatch (ADR 16
+  amendment). Separately, the script validated `chromeThemeId` against the chrome
   allowlist but took `activeClockId` on nothing but a `typeof` check, despite
   the comment claiming both fell back. The blob is hand-editable, so both are
   allowlisted now — and `data-clock`'s default comes from

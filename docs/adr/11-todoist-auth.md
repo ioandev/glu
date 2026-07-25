@@ -45,6 +45,25 @@
   and, whenever `NODE_ENV` was not `production`, an HTML page with a full
   filesystem-path stack trace, reachable unauthenticated.
 
+- Amended: 2026-07-25 — **the App Management Console's verification token is
+  wired in, as a signature over the state, not as the state.** The console
+  issues a per-app verification token beside the client id and secret; the
+  obvious use is to send it as the OAuth `state`, and that is the one thing
+  not to do. `state` travels in a URL: it is written to browser history, can
+  leak by `Referer`, and lands in every access log between here and Todoist —
+  no place for a static per-app secret, and a fixed `state` would also throw
+  away the per-request unguessability the CSRF check depends on.
+
+  So `TODOIST_VERIFICATION_TOKEN` (optional; empty preserves the behaviour
+  above exactly) signs the nonce instead: `state` becomes
+  `<nonce>.<HMAC-SHA256(nonce, token)>`, and the callback checks the signature
+  with `timingSafeEqual` **in addition to** the cookie comparison, which is
+  untouched and still the CSRF control. Failure is `403 state_unverified`,
+  distinct from `state_mismatch` so the logs say which check refused. What it
+  buys is modest and worth naming honestly: proof that a returning `state` was
+  minted by this app registration rather than merely echoed back, which is a
+  second, independent reason to refuse a callback the cookie check would have
+  refused anyway. It is defence in depth, not a new guarantee.
 - Deviation (2026-07-24, implementation): the account menu is a Mantine
   `Popover` holding one button rather than a `Menu`. Mantine's Menu renders a
   `role="presentation"` focus-trap anchor as a direct child of `role="menu"`,
@@ -133,8 +152,9 @@ reserved *region*, not the extreme corner the arrow owns).
     re-consenting later to widen scope is a whole re-auth — take the scope
     the roadmap needs).
   - `GET /api/auth/todoist/callback` — verifies `state` against the cookie
-    (mismatch → 403, no session), exchanges the code, seals the token set,
-    redirects to `/glu`.
+    (mismatch → 403, no session) and, when a verification token is configured,
+    its signature too (2026-07-25 amendment), exchanges the code, seals the
+    token set, redirects to `/glu`.
   - `GET /api/auth/todoist/status` — `{authenticated, name?}`; **refreshes
     transparently** when the access token is expired; a failed refresh clears
     the cookie and reports unauthenticated (revoked-at-Todoist degrades to
@@ -231,7 +251,8 @@ reserved *region*, not the extreme corner the arrow owns).
    user, but *log* refresh failures distinctly so a rotation race isn't
    misread as revocation.
 3. **Registration + env** — two Todoist apps (dev/prod), `TODOIST_CLIENT_ID`,
-   `TODOIST_CLIENT_SECRET`, `SESSION_SECRET` via `.env` (gitignored),
+   `TODOIST_CLIENT_SECRET`, optional `TODOIST_VERIFICATION_TOKEN`
+   (2026-07-25 amendment), `SESSION_SECRET` via `.env` (gitignored),
    `.env.example` committed, secrets never in `NEXT_PUBLIC_*`.
 4. **`TodoistButton`** — status fetch on mount (SWR-style: render logged-out
    optimistically, swap on response; no layout shift between states —
@@ -258,6 +279,7 @@ rest. OAuth is never the afternoon it looks like.
 - [~] Completing consent lands back on `/glu` with a sealed httpOnly `Secure` `SameSite=Lax` cookie; no token material is readable from `document.cookie` or localStorage. — **[deferred → HUMAN-TODO]** (needs a registered Todoist app; the equivalent server behaviour is covered by the supertest suite, and the UI states by stubbed-`/status` stories and E2E)
 - [~] `status` then returns `{authenticated:true, name:<account name>}` and the button shows the chip with that name. — **[deferred → HUMAN-TODO]** (needs a registered Todoist app; the equivalent server behaviour is covered by the supertest suite, and the UI states by stubbed-`/status` stories and E2E)
 - [x] A callback with a wrong/missing `state` returns 403 and sets no session cookie (supertest).
+- [x] With `TODOIST_VERIFICATION_TOKEN` set, `login`'s `state` is `<nonce>.<signature>` with a fresh nonce per login, the token appears nowhere in the redirect URL, and a callback whose signature is forged or absent returns `403 state_unverified` with no upstream call — even when the state cookie matches. With it unset the state is a bare nonce and every other criterion here is unchanged (supertest).
 - [x] With a fabricated expired token set in the sealed cookie, `status` transparently refreshes (mocked) and reseals; a failed refresh clears the cookie and returns `{authenticated:false}` (supertest).
 - [x] Log out clears the cookie (supertest); the button returns to "Log in" and a subsequent `status` is unauthenticated (story + E2E).
 - [x] The button renders in the top-right reserved area at ≥`sm`, in the stacked section below `sm`, is ≥44 px, and keeps identical Todoist branding across both schemes (and across clock palettes if ADR 08 is implemented).

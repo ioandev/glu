@@ -118,7 +118,7 @@ describe("± adjustments (ADR 02/03)", () => {
     const t0 = freezeClock();
     store().setPreset(20 * MINUTE);
     store().start();
-    const deltas = [2, -5, 5, -2, -5, 2, 2, -2, 5, -5].map((m) => m * MINUTE);
+    const deltas = [1, -5, 5, -1, -5, 1, 1, -1, 5, -5].map((m) => m * MINUTE);
     let now = t0;
     for (const d of deltas) {
       now += 10_000;
@@ -139,6 +139,103 @@ describe("± adjustments (ADR 02/03)", () => {
     store().adjust(-5 * MINUTE);
     expect(store().status).toBe("finished");
     expect(store().remaining).toBe(0);
+  });
+
+  it("leaves the selection alone while a run is in flight", () => {
+    const t0 = freezeClock();
+    store().setPreset(20 * MINUTE);
+    store().start();
+    vi.setSystemTime(t0 + 60_000);
+    store().adjust(5 * MINUTE);
+    // A `+5` to finish a thought is a nudge to this run, not a new preset.
+    expect(store().selectedDuration).toBe(20 * MINUTE);
+    store().stop();
+    expect(store().remaining).toBe(20 * MINUTE);
+  });
+});
+
+describe("± with no run in flight — custom durations (ADR 32)", () => {
+  it("the reported repro: finish 5m, −1 twice, start → a 3-minute run", () => {
+    const t0 = freezeClock();
+    store().setPreset(5 * MINUTE);
+    store().start();
+    vi.setSystemTime(t0 + 5 * MINUTE);
+    store().finish();
+
+    store().adjust(-MINUTE);
+    store().adjust(-MINUTE);
+    expect(store().selectedDuration).toBe(3 * MINUTE);
+    expect(store().remaining).toBe(3 * MINUTE);
+
+    store().start();
+    expect(store().total).toBe(3 * MINUTE);
+    expect(store().endAt).toBe(t0 + 5 * MINUTE + 3 * MINUTE);
+  });
+
+  it("counts from the selected duration at finished, not from the 0 on the clock", () => {
+    const t0 = freezeClock();
+    store().setPreset(20 * MINUTE);
+    store().start();
+    // A mid-run nudge moves `total` to 25 but leaves the selection at 20; the
+    // base once finished is what Start would have re-armed, not what just ran.
+    vi.setSystemTime(t0 + 60_000);
+    store().adjust(5 * MINUTE);
+    vi.setSystemTime(t0 + 30 * MINUTE);
+    store().finish();
+
+    store().adjust(-5 * MINUTE);
+    expect(store().selectedDuration).toBe(15 * MINUTE);
+  });
+
+  it("leaves finished behind, in the shape stop produces", () => {
+    const t0 = freezeClock();
+    store().setPreset(5 * MINUTE);
+    store().start();
+    vi.setSystemTime(t0 + 5 * MINUTE);
+    store().finish();
+
+    store().adjust(MINUTE);
+    expect(store().status).toBe("idle");
+    expect(store().runId).toBeNull();
+    expect(store().ranMs).toBe(0);
+    expect(store().runningSince).toBeNull();
+    expect(store().endAt).toBeNull();
+  });
+
+  it("moves clock and selection together at idle", () => {
+    freezeClock();
+    store().setPreset(20 * MINUTE);
+    store().adjust(-MINUTE);
+    expect(store().status).toBe("idle");
+    expect(store().remaining).toBe(19 * MINUTE);
+    expect(store().total).toBe(19 * MINUTE);
+    // The row would otherwise keep 20m highlighted against a 19:00 clock.
+    expect(store().selectedDuration).toBe(19 * MINUTE);
+  });
+
+  it("survives start, stop and n", () => {
+    const t0 = freezeClock();
+    store().setPreset(5 * MINUTE);
+    store().adjust(-2 * MINUTE);
+
+    store().start();
+    expect(store().total).toBe(3 * MINUTE);
+    store().stop();
+    expect(store().remaining).toBe(3 * MINUTE);
+    expect(store().selectedDuration).toBe(3 * MINUTE);
+
+    vi.setSystemTime(t0 + 1000);
+    store().restart();
+    expect(store().total).toBe(3 * MINUTE);
+  });
+
+  it("floors at one minute instead of finishing a run that never started", () => {
+    freezeClock();
+    store().setPreset(5 * MINUTE);
+    store().adjust(-5 * MINUTE);
+    expect(store().status).toBe("idle");
+    expect(store().remaining).toBe(MINUTE);
+    expect(store().selectedDuration).toBe(MINUTE);
   });
 });
 
@@ -233,6 +330,260 @@ describe("suspension and restore (ADR 02/03)", () => {
     freezeClock();
     await useGluStore.persist.rehydrate();
     expect(store()).toMatchObject({ status: "idle", total: 20 * MINUTE });
+  });
+});
+
+describe("swipe hint (ADR 08 amendment)", () => {
+  it("shows by default and closing it is one-way", () => {
+    freezeClock();
+    expect(store().swipeHintDismissed).toBe(false);
+
+    store().dismissSwipeHint();
+    expect(store().swipeHintDismissed).toBe(true);
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({ swipeHintDismissed: true });
+  });
+
+  it("a blob written before the hint existed reads back undismissed", async () => {
+    freezeClock();
+    const { swipeHintDismissed, ...before } = initialPersistedState();
+    void swipeHintDismissed;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({
+        version: CURRENT_BLOB_VERSION,
+        state: { ...before, activeClockId: "terminal" },
+      }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    // Additive field, no version bump (ADR 19's pattern).
+    expect(store().swipeHintDismissed).toBe(false);
+    expect(store().activeClockId).toBe("terminal");
+  });
+});
+
+describe("welcome gate (ADR 31)", () => {
+  it("starts closed and entering is one-way", () => {
+    freezeClock();
+    expect(store().hasEnteredApp).toBe(false);
+
+    store().enterApp();
+    expect(store().hasEnteredApp).toBe(true);
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({ hasEnteredApp: true });
+  });
+
+  /**
+   * The one that matters. `migrate` only fires when the stored version differs,
+   * so an existing v2 blob never reaches it — if the flag were left to the
+   * additive-blob default, every current user's next load would greet them with
+   * a landing page. `merge` is what catches this, and this test is why.
+   */
+  it("a v2 blob written before the gate existed loads straight into the app", async () => {
+    freezeClock();
+    const { hasEnteredApp, ...before } = initialPersistedState();
+    void hasEnteredApp;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({
+        version: CURRENT_BLOB_VERSION,
+        state: { ...before, activeClockId: "terminal", swipeHintDismissed: true },
+      }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    // Possessing a blob is proof of a prior visit — the gate must not reappear.
+    expect(store().hasEnteredApp).toBe(true);
+    // ...and the rest of the blob survives the override.
+    expect(store().activeClockId).toBe("terminal");
+    expect(store().swipeHintDismissed).toBe(true);
+  });
+
+  it("a v1 blob migrates in as entered, with its sessions intact", async () => {
+    freezeClock();
+    window.localStorage.setItem(
+      blobKey(1),
+      JSON.stringify({
+        version: 1,
+        state: { activeClockId: "orbit", selectedDuration: 45 * MINUTE },
+      }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    expect(store().hasEnteredApp).toBe(true);
+    expect(store().activeClockId).toBe("orbit");
+    expect(store().selectedDuration).toBe(45 * MINUTE);
+  });
+
+  it("no blob at all is the genuine first visit, and stays closed", async () => {
+    freezeClock();
+    expect(window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION))).toBeNull();
+
+    // `merge` is called with `undefined` on this path; it must not read it as
+    // "a blob with the field absent".
+    await useGluStore.persist.rehydrate();
+    expect(store().hasEnteredApp).toBe(false);
+  });
+
+  /**
+   * A corrupt blob is indistinguishable from no blob at the *parse* layer, but
+   * not at the key layer: something is there, so somebody has been here. Losing
+   * the archive to a mangled write is bad enough without also being handed a
+   * landing page for an app you use daily.
+   */
+  it("a corrupt blob loads clean defaults but stays entered", async () => {
+    freezeClock();
+    window.localStorage.setItem(blobKey(CURRENT_BLOB_VERSION), "{not json");
+
+    await useGluStore.persist.rehydrate();
+    expect(store().hasEnteredApp).toBe(true);
+    expect(store().remaining).toBe(initialPersistedState().remaining);
+    expect(store().activeClockId).toBe(initialPersistedState().activeClockId);
+  });
+
+  it("a blob that explicitly says not-yet still shows the gate", async () => {
+    freezeClock();
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({
+        version: CURRENT_BLOB_VERSION,
+        state: { ...initialPersistedState(), hasEnteredApp: false },
+      }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    expect(store().hasEnteredApp).toBe(false);
+  });
+
+  it("entering leaves every other persisted field alone", async () => {
+    freezeClock();
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({
+        version: CURRENT_BLOB_VERSION,
+        state: {
+          ...initialPersistedState(),
+          hasEnteredApp: false,
+          activeClockId: "radar",
+          archive: [{ startedAt: 1, sessions: [] }],
+        },
+      }),
+    );
+    await useGluStore.persist.rehydrate();
+
+    store().enterApp();
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({
+      hasEnteredApp: true,
+      activeClockId: "radar",
+      archive: [{ startedAt: 1, sessions: [] }],
+    });
+  });
+});
+
+describe("scroll hint (ADR 08 amendment)", () => {
+  it("starts false and every path into a run flips it one-way", () => {
+    freezeClock();
+    expect(store().hasStartedRun).toBe(false);
+
+    store().start();
+    expect(store().hasStartedRun).toBe(true);
+
+    // Stopping does not bring the arrow back: the user has seen what is below.
+    store().stop();
+    expect(store().hasStartedRun).toBe(true);
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({ hasStartedRun: true });
+  });
+
+  it("`n` (restart) and resuming a pause both count as having started", () => {
+    freezeClock();
+    store().restart();
+    expect(store().hasStartedRun).toBe(true);
+
+    // Resume, from a blob that predates the field mid-run.
+    useGluStore.setState({ hasStartedRun: false });
+    store().pause();
+    store().start();
+    expect(store().hasStartedRun).toBe(true);
+  });
+
+  it("survives New day — it is a lifetime fact, not a session count", () => {
+    freezeClock();
+    store().start();
+    store().finish();
+    store().newDay();
+
+    expect(store().day.sessions).toHaveLength(0);
+    expect(store().hasStartedRun).toBe(true);
+  });
+
+  it("a blob written before the field existed reads back as not-yet-started", async () => {
+    freezeClock();
+    const { hasStartedRun, ...before } = initialPersistedState();
+    void hasStartedRun;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({
+        version: CURRENT_BLOB_VERSION,
+        state: { ...before, activeClockId: "terminal" },
+      }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    // Additive field, no version bump (ADR 19's pattern).
+    expect(store().hasStartedRun).toBe(false);
+    expect(store().activeClockId).toBe("terminal");
+  });
+});
+
+describe("wake-lock preferences (ADR 17 amendment)", () => {
+  it("defaults to the shipped ADR 17 policy: run only", () => {
+    expect(store().stayAwakeAlways).toBe(false);
+    expect(store().stayAwakeWhileRunning).toBe(true);
+  });
+
+  it("both toggles persist into the blob", () => {
+    freezeClock();
+    store().setStayAwakeAlways(true);
+    store().setStayAwakeWhileRunning(false);
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({
+      stayAwakeAlways: true,
+      stayAwakeWhileRunning: false,
+    });
+  });
+
+  it("a blob written before the toggles existed reads back at the defaults", async () => {
+    freezeClock();
+    const { stayAwakeAlways, stayAwakeWhileRunning, ...before } = initialPersistedState();
+    void stayAwakeAlways;
+    void stayAwakeWhileRunning;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({ version: CURRENT_BLOB_VERSION, state: { ...before, remaining: 7 * MINUTE } }),
+    );
+
+    await useGluStore.persist.rehydrate();
+    // Additive field, no version bump: the default fills in and the rest of the
+    // blob is untouched.
+    expect(store().stayAwakeAlways).toBe(false);
+    expect(store().stayAwakeWhileRunning).toBe(true);
+    expect(store().remaining).toBe(7 * MINUTE);
+  });
+
+  it("neither toggle touches the timer", () => {
+    const t0 = freezeClock();
+    store().start();
+    store().setStayAwakeAlways(true);
+    store().setStayAwakeWhileRunning(false);
+    expect(store()).toMatchObject({ status: "running", endAt: t0 + 20 * MINUTE });
   });
 });
 

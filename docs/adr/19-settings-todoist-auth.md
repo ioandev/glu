@@ -7,6 +7,54 @@
   **deliberately outside the persisted partition** — auth status is server
   truth (the sealed cookie), never localStorage's. Semantics and all
   criteria unchanged; "provider" below reads as "store".
+- Amended: 2026-07-25 — **the Screen section lands: the first of the four
+  penciled rows** (owner brief: "add two buttons in settings: Stay awake on the
+  website, Stay awake when the timer is running"). It discharges the
+  "wake-lock opt-out · ADR 17" pencil and widens it — the second toggle is the
+  opt-out this ADR anticipated, the first is an opt-*up* that ADR 17 had listed
+  as needing a new brief. The policy itself is amended there; this ADR owns
+  only the surface.
+
+  **The section skeleton did its job and is the whole story here**: one more
+  `<section aria-label>` with a title, a divider and two ≥44 px rows. The modal
+  did not move, resize or re-layout, no new proxy surface appeared, and the two
+  fields ride the additive-blob pattern this ADR promised future sections would
+  use (no version bump). The one thing this amendment does change is a premise:
+  **Settings is no longer auth-only**, so the section list is now a real list
+  and the closing "more settings land here" note is one item shorter.
+
+- Amended: 2026-07-25b — **the Time comments section lands** (**ADR 27**: one
+  switch, "Say how you worked", on by default). Third section, and the first
+  one whose content is app *data* rather than app state: under the switch sit
+  **two live previews** of the comment GLU will post — decorated and plain,
+  composed from the current environment toggles and the user's own preset, with
+  the active one marked. The section skeleton held again (one
+  `<section aria-label>`, a title, a divider, a ≥44 px row), the modal did not
+  move, and the field rides the additive-blob pattern with no version bump.
+  The one thing worth recording for the sections still to come: **the previews
+  are quieter, not dimmer** — `opacity` on the inactive sample failed the a11y
+  contrast gate at 2.39:1, so fill and border carry the distinction and both
+  sentences stay legible. Any future section that wants an "inactive" treatment
+  should copy that, not the first instinct.
+
+- Amended: 2026-07-25c — **the Time comments section gains a second row, and
+  it is the first one that is not a switch** (**ADR 28**: "Minimum time to
+  log", a 1 / 2 / 5 / 10 / 15 minute ladder, default 1). It sits **above** the
+  ADR 27 switch — whether a comment happens at all precedes what its sentence
+  says — and the switch keeps its previews adjacent, because they belong to it
+  rather than to the section.
+
+  Two things worth recording for the sections still to come. **A non-switch row
+  has a shape now**: label, one-line description, control, with the switch's
+  label typography restated so the list still reads as one list rather than as
+  two component libraries meeting. And **a segmented control has to be
+  re-tokenised twice** — Mantine paints the moving indicator and the active
+  segment's text from its own palette, so both `--sc-color`/`--sc-label-color`
+  and the inactive label colour need pointing at chrome tokens; setting one and
+  not the other leaves page ink on the accent fill, which is the contrast gate's
+  favourite failure. The 44 px floor belongs on each rung's `<label>`, not on
+  the text node inside it. Field rides the additive-blob pattern, no version
+  bump.
 
 - Deviation (2026-07-24, implementation): the global-401 handler lives in the
   fetch layer (`src/lib/api.ts`) as a subscription the auth store registers, so
@@ -129,6 +177,7 @@ order: … 10 → 11 → **19** → 12 → 13 → 14).
 - The four penciled settings (chrome selection · 15, archive export · 05,
   wake-lock opt-out · 17, alert volume · 18) → **future amendments to this
   ADR**, one section row each. The pencil list lives in CLAUDE.md.
+  *(The wake-lock row landed 2026-07-25 — see the amendment; three left.)*
 - Multi-account switching UX — logout → login *is* the switch; anything
   fancier needs a brief.
 - Any new proxy endpoint — `login`/`logout`/`status` (ADR 11) already
@@ -174,7 +223,7 @@ three retrofits this ADR just prevented.
 
 ## Acceptance criteria
 
-- [x] Drawer → Settings opens a near-full-size modal (≥`sm`) / full-screen (below `sm`) with a section list containing exactly one section: Todoist.
+- [x] Drawer → Settings opens a near-full-size modal (≥`sm`) / full-screen (below `sm`) with a section list containing exactly one section: Todoist. — **amended 2026-07-25**: two sections, Todoist then Screen; **2026-07-25b**: three, with Time comments last. The modal itself is unchanged.
 - [x] Logged in: the section shows the account name and a Log out row; tapping it flips the top-right area to the Log in button **without a reload** and the modal remains open showing the branded login. (ADRs 12–14 landed after this one and consume the same store — their surfaces are covered by their own criteria.)
 - [~] Logged out: the section shows the same branded login as the top-right area (one component, verified by import, not resemblance); tapping it performs the ADR 11 OAuth redirect; after the round trip the app is logged in everywhere with the modal closed. — the component identity and the redirect URL are verified; **the round trip itself is [deferred → HUMAN-TODO]** (needs a registered Todoist app)
 - [x] `todoistSource` and `focusedTask` survive a logout→login cycle (inspect the blob before/after).
@@ -184,6 +233,29 @@ three retrofits this ADR just prevented.
 - [x] No new proxy endpoints exist (allowlist test unchanged); no new blob fields were added.
 - [x] All modal rows ≥44 px; both schemes and all three chrome directions render the modal correctly (stories + a11y pass).
 - [x] `npm test`, `npm run build`, `npm run build-storybook` green; the ADR 09 block is active and green.
+
+### Added by the 2026-07-25 amendment
+
+- [x] The Screen section shows two switches — "Stay awake on the website" (off) and "Stay awake when the timer is running" (on) — each ≥44 px, styled through chrome tokens like ADR 08's session switch, in both schemes and all three directions.
+- [x] Toggling either one writes the matching field into the `glu:v2` blob and survives a reload; no blob version bump was needed.
+- [x] The section renders identically in every auth state — it shares nothing with the Todoist section, which is the point of a section list.
+- [x] The accessible name of each switch is its visible label alone (Mantine's `<label>` wraps the description, so the name is set explicitly rather than left to swallow it and be re-announced via `aria-describedby`).
+- [x] No new proxy endpoints; the modal's size and responsive behaviour are untouched; the closing "more settings" note dropped the row that landed.
+
+### Added by the 2026-07-25b amendment (ADR 27)
+
+- [x] The modal shows a third section, "Time comments", with one ≥44 px switch, "Say how you worked", on by default; its accessible name is its visible label alone.
+- [x] Under it, two previews show the comment both ways, composed from the live environment toggles and the current preset; the active one is marked and flipping the switch moves the mark. With no toggles on the decorated one borrows a sample and is labelled `Example`, never `Now` (ADR 27 amendment b).
+- [x] Both previews pass the a11y contrast gate in both schemes — the inactive one is distinguished by fill and border, never by `opacity` on its text.
+- [x] The long-environment preview wraps inside the modal at 590 px instead of widening it.
+- [x] `commentEnvironment` lands in the `glu:v2` blob with no version bump; a blob written before the field reads as on.
+
+### Added by the 2026-07-25c amendment (ADR 28)
+
+- [x] The Time comments section leads with a "Minimum time to log" ladder — five rungs, each ≥44 px, 1 min selected by default — above the "Say how you worked" switch.
+- [x] Its accessible name is the visible label alone (a `radiogroup`, named by the row's own label rather than by a duplicated `aria-label`).
+- [x] Picking a rung writes `commentThresholdMinutes` into the `glu:v2` blob and survives a reload with no version bump; a blob written before the field reads as 1 min, and an off-ladder value renders as 1 min rather than as nothing selected.
+- [x] The ladder is styled through chrome tokens in both schemes and all three directions — indicator on `--glu-accent`, active rung on `--glu-on-accent`, the rest on `--glu-muted` — and passes the a11y contrast gate.
 
 ## Consequences
 

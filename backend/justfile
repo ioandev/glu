@@ -48,6 +48,7 @@ env:
     else
       cp .env.example .env
       echo "created backend/.env — fill in TODOIST_CLIENT_ID / TODOIST_CLIENT_SECRET"
+      echo "(optionally TODOIST_VERIFICATION_TOKEN — see the comments in the file)"
       echo "and SESSION_SECRET (generate one with: just backend secret)"
     fi
 

@@ -23,8 +23,8 @@ export const tideTheme: ClockTheme = {
   },
 };
 
-export function Tide({ remainingSeconds, totalSeconds, state, accent }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+export function Tide({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={tideTheme} accent={accent} state={state}>

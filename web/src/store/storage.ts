@@ -27,7 +27,16 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
-export function createVersionedKeyStorage<T>(): PersistStorage<T> {
+/**
+ * @param onCorrupt what to load in place of a blob that will not parse. The
+ *   default is "nothing at all", which is right for any caller that only cares
+ *   about the data; ADR 31 passes one because it cares about something else —
+ *   see the call site in `gluStore.ts`. Kept as a parameter rather than baked
+ *   in so this adapter stays ignorant of what is inside the blob.
+ */
+export function createVersionedKeyStorage<T>(
+  onCorrupt?: () => StorageValue<T>,
+): PersistStorage<T> {
   return {
     getItem: (): StorageValue<T> | null => {
       const ls = safeLocalStorage();
@@ -39,7 +48,7 @@ export function createVersionedKeyStorage<T>(): PersistStorage<T> {
           return JSON.parse(raw) as StorageValue<T>;
         } catch {
           // A corrupt blob must load clean defaults, never throw (ADR 03).
-          return null;
+          return onCorrupt?.() ?? null;
         }
       }
       return null;

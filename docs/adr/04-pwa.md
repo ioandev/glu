@@ -23,6 +23,19 @@
   applies the basePath and composes instead of replacing. `app/icon.png` is now
   generated square (64 px) from the SVG too, closing ADR 01's "non-square
   fallback until ADR 04's icon set replaces it".
+- Amended: 2026-07-25 — **`start_url` and `scope` lose their trailing slash**
+  (`/glu/` → `/glu`). Found by the deferred on-device check finally running:
+  the app installed on Android Chrome opened with a browser toolbar — title +
+  origin, ✕, ⋮ — not standalone. Cause: Next serves the app at `/glu` and
+  308-redirects `/glu/` onto it, so the WebAPK launched at `start_url: "/glu/"`,
+  followed the redirect, and landed on `/glu` — which is **outside**
+  `scope: "/glu/"`, because scope is a plain path *prefix* and `/glu/` is not a
+  prefix of `/glu`. Chrome's answer to an out-of-scope launch is exactly that
+  toolbar. `/glu` contains both the landing page and every `/glu/...` route, so
+  one character fixes it. `id` stays `/glu/` — it is identity, not a route, and
+  changing it would make installed copies a different app instead of an update.
+  This ADR's decision text said "`id`/`start_url`/`scope` under `/glu/`"; read
+  it as "under the app's basePath".
 
 - Deviation (2026-07-24, implementation): `theme_color` in the manifest keeps
   the mark's ink, but the `<meta name="theme-color">` variants use the default
@@ -71,7 +84,9 @@ guard with tests.
   online. If that ever bites → future **ADR: offline mode**.
 - **We will define the manifest via `app/manifest.ts`** (typed, and the link
   tag the convention emits gets the basePath). `name`/`short_name` "GLU",
-  `display: "standalone"`, `id`/`start_url`/`scope` under `/glu/`, **no
+  `display: "standalone"`, `id`/`start_url`/`scope` under `/glu/` — *amended
+  2026-07-25: `start_url`/`scope` are `/glu`, no trailing slash; see above* —
+  **no
   orientation lock** — half-tablet portrait use is a first-class mode.
   `theme_color: "#141D2A"` (the mark's ink), `background_color: "#ffffff"` —
   placeholders; ADR 08 will make the site's colors clock-driven and may amend.
@@ -176,9 +191,13 @@ two-device verification pass are all of it; there is no moving part left.
 - [x] `scripts/generate-icons.mjs` is committed and re-runnable (delete outputs, run, identical set returns).
 - [x] The manifest is served under `/glu/`, and devtools → Application → Manifest shows no errors or warnings; `id`, `start_url`, `scope` all resolve under `/glu/`; 192 and 512 icons are listed and load.
 - [x] Chrome offers install **with the Service Workers pane empty** — `navigator.serviceWorker.getRegistrations()` returns `[]` on the prod build (asserted in the ADR 09 suite); the install *prompt* itself is part of the deferred on-device check.
-- [~] The installed app launches standalone (no browser chrome) at the timer screen. — **[deferred → HUMAN-TODO]** (needs a real install surface / real network cut)
+- [~] The installed app launches standalone (no browser chrome) at the timer screen. — **ran 2026-07-25 on Android Chrome and FAILED**: the installed app opened with the in-app toolbar (title + origin, ✕, ⋮). Cause and fix in the 2026-07-25 scope amendment above; the trailing slash made every launch out-of-scope. Back to **[deferred → HUMAN-TODO]** until the fix is deployed and the app is reinstalled (a WebAPK re-mints from the new manifest, so the old install must go).
 - [~] iPad Safari Add-to-Home-Screen yields a standalone app with the correct icon on a solid background (no black square). — **[deferred → HUMAN-TODO]** (needs a real install surface / real network cut)
 - [~] With the network cut while the installed app is open, a running timer keeps counting; a reload without network shows the browser offline page, and after reconnecting the app restores its localStorage state per ADR 02. — **[deferred → HUMAN-TODO]** (needs a real install surface / real network cut)
+### Added by the 2026-07-25 scope amendment
+
+- [x] `start_url` fetches 200 **without a redirect**, and its final path is a prefix match for `scope` — the machine-checkable half of "launches standalone", so the next trailing-slash regression fails CI instead of shipping to a home screen. (ADR 09 suite, PWA collateral test.)
+
 - [x] Dark/light `theme-color` variants are emitted from the viewport export (visible as two `<meta name="theme-color">` tags with media attributes).
 - [x] `npm run build`, `npm test`, and `npm run build-storybook` all still pass.
 - [—] No sound or notification fires at timer end (explicitly deferred). — **superseded by ADR 18** (chime + Notification, still no service worker)

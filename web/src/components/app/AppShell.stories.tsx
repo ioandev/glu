@@ -56,6 +56,89 @@ export const HalfTablet: Story = {
 };
 
 /**
+ * ADR 08 amendment: below `sm` the clock is the first viewport *full-bleed* —
+ * the whole width and the whole height, no padding, no chevrons — and the
+ * one-time swipe hint rides at the top of it, which there is the top of the page.
+ */
+export const PhoneClockIsFullBleed: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const slot = canvas.getByTestId("clock-slot").getBoundingClientRect();
+
+    await expect(Math.round(slot.width)).toBe(window.innerWidth);
+    await expect(Math.round(slot.height)).toBe(window.innerHeight);
+    await expect(Math.round(slot.top)).toBe(0);
+
+    // No chevrons down here — the hint is what teaches the flip instead.
+    await expect(canvas.queryByRole("button", { name: "Next clock design" })).toBeNull();
+    const hint = canvas.getByTestId("swipe-hint").getBoundingClientRect();
+    await expect(hint.top).toBeLessThan(60);
+  },
+};
+
+/** Dismissing the hint is permanent — and it is the only thing that removes it. */
+export const SwipeHintDismissal: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId("swipe-hint")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Dismiss tip" }));
+    await expect(canvas.queryByTestId("swipe-hint")).toBeNull();
+    await expect(useGluStore.getState().swipeHintDismissed).toBe(true);
+  },
+};
+
+/**
+ * ADR 08 amendment: the full-bleed phone clock reads as the whole page, so an
+ * arrow at its bottom edge says the rest is one scroll down.
+ */
+export const PhoneScrollHint: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const hint = canvas.getByTestId("scroll-hint").getBoundingClientRect();
+    const slot = canvas.getByTestId("clock-slot").getBoundingClientRect();
+
+    // On the fold: inside the first viewport, hard against its bottom edge.
+    await expect(hint.bottom).toBeLessThanOrEqual(slot.bottom);
+    await expect(slot.bottom - hint.bottom).toBeLessThan(60);
+    // And there really is more below it to point at.
+    await expect(document.documentElement.scrollHeight).toBeGreaterThan(
+      window.innerHeight,
+    );
+  },
+};
+
+/** Starting a run answers the question for good — including across a reload. */
+export const ScrollHintRetiresOnFirstRun: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId("scroll-hint")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Start" }));
+    await expect(canvas.queryByTestId("scroll-hint")).toBeNull();
+    await expect(useGluStore.getState().hasStartedRun).toBe(true);
+
+    // Stopping does not bring it back.
+    await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
+    await expect(useGluStore.getState().status).toBe("idle");
+    await expect(canvas.queryByTestId("scroll-hint")).toBeNull();
+  },
+};
+
+/** Above `sm` there is no page scroll, so the arrow does not render at all. */
+export const TabletHasNoScrollHint: Story = {
+  globals: { viewport: { value: "tablet" } },
+  play: async ({ canvasElement }) => {
+    const hint = within(canvasElement).getByTestId("scroll-hint");
+    await expect(getComputedStyle(hint).display).toBe("none");
+  },
+};
+
+/**
  * ADR 06's bindings, driven at the shell where they are mounted. The keys are
  * sent to the document, which is exactly where a user's keystrokes land.
  */

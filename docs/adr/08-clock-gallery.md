@@ -17,6 +17,37 @@
   flip, never the 18-wide strip this ADR rejected. Flip semantics (order,
   wrapping, 40 px threshold, horizontal intent, persistence, palette repaint)
   are untouched.
+- Amended: 2026-07-25 — **phone chrome pass** (owner call, from the shipped
+  build). Three changes, all below-`sm` except the last:
+  1. The clock is **full-bleed**: no slot padding, no 520 px cap, square
+     corners — a viewport has no corners to round. "The clock owns the first
+     `100dvh`" was true in height and false in feel; it read as a cramped card
+     floating in page background.
+  2. **No chevrons at all below `sm`.** The swipe is the only flip there, so it
+     is *said*: a one-time hint pinned to the top of the clock — which below
+     `sm` is the top of the page — inert to pointers apart from its close
+     button, so it cannot eat the gesture it teaches. Closing it is permanent,
+     stored as the additive blob field `swipeHintDismissed` (default `false`).
+  3. At/above `sm` the chevrons stay, resting at **10 % opacity** and returning
+     to full on hover/focus-visible — quiet enough not to compete with the
+     clock, still reachable by keyboard.
+
+  Knock-on: ADR 10's corner arrow now sits on clock paint rather than on the
+  page below `sm`, so it takes the same token surface as the hint. Everything
+  else — flip semantics, persistence, palette repaint, the 44 px floor, the
+  tablet contract — is untouched.
+
+- Amended: 2026-07-25 — the full-bleed phone clock this ADR specifies is a
+  perfect first viewport and therefore a perfect dead end: nothing peeks above
+  the fold to say the presets, transport, Todoist block and toggles are one
+  scroll below. A **scroll-affordance arrow** now sits at the bottom edge of
+  the clock slot below `sm`, inert to pointers (the slot is the swipe surface)
+  and gated on a new one-way persisted field, `hasStartedRun` — it retires on
+  the **first run**, not on a tap, because starting a timer proves the user
+  found the transport controls below it. Above `sm` it does not render: ADR 02's
+  no-scroll contract still holds there, so there is nothing to point at. This is
+  the second one-time hint on this surface, after the swipe hint; both are
+  additive blob fields, no version bump.
 
 - Deviation (2026-07-24, implementation): palette propagation goes through
   ADR 15's static token stylesheet keyed on `[data-chrome][data-clock]`, with the
@@ -61,9 +92,11 @@ lives in the timer half, the drawer overlays from the right edge).
 
 - **The clock slot itself is the gallery.** No separate picker screen: swipe
   horizontally on the clock (primary, tablet-first) or tap flanking chevron
-  arrows (the brief's arrows — always visible but visually quiet, ≥44 px) to
-  move through the registry in order, wrapping at the ends. One interaction
-  surface, zero navigation.
+  arrows (the brief's arrows — visually quiet, ≥44 px) to move through the
+  registry in order, wrapping at the ends. One interaction surface, zero
+  navigation. *(Amended 2026-07-25: "always visible" holds only at/above `sm`,
+  and "quiet" is 10 % opacity there; below `sm` the chevrons are gone and the
+  one-time hint carries the affordance.)*
 - **Only the active clock renders.** 18 mounted clocks means 18 ticking
   subtrees and Aurora's blur layers running off-screen; switch is an
   unmount/mount fed by the same props. Slide/crossfade polish is optional
@@ -102,9 +135,11 @@ lives in the timer half, the drawer overlays from the right edge).
 
 ### Mobile layout (below `sm`)
 
-- **The clock owns the first `100dvh` viewport; everything else stacks
-  below and the page scrolls.** This supersedes ADR 02's "no page scroll at
-  either breakpoint" for the below-`sm` case only (ADR 02 amended; the
+- **The clock owns the first `100dvh` viewport, full-bleed** (amended
+  2026-07-25: edge to edge, no padding, no width cap, square corners, no
+  chevrons); **everything else stacks below and the page scrolls.** This
+  supersedes ADR 02's "no page scroll at either breakpoint" for the below-`sm`
+  case only (ADR 02 amended; the
   at/above-`sm` contract — timer left half, toggles bottom-right, Todoist
   reservation top-right, no scroll — is unchanged). **Gotcha:** `dvh` on
   mobile browsers means the first viewport resizes as browser chrome
@@ -144,8 +179,8 @@ lives in the timer half, the drawer overlays from the right edge).
 - Gallery in the clock slot: swipe + wrap-around chevrons, active-only
   rendering, `activeClockId` persistence with default `halo`.
 - Text-display replacement: active clock receives
-  `remainingSeconds`/`totalSeconds`/`session`/`showSession`/`state` from the
-  ADR 02 hook (and ADR 05's count when present).
+  `remainingMs`/`totalMs`/`session`/`showSession`/`state` from the
+  ADR 02 hook (seconds until ADR 07's 2026-07-25 amendment) (and ADR 05's count when present).
 - Palette propagation to page background/text accents via root CSS variables,
   scheme-aware.
 - `showSession` switch near the session strip; `showSessionOnClock`
@@ -219,6 +254,19 @@ mechanics are an afternoon.
 - [x] Below `sm` (~590 px): the clock fills the first viewport (`100dvh`), everything else stacks below, and the page scrolls; at ~1180 px the ADR 02 layout contract is unchanged and the page does not scroll.
 - [x] All chrome (toggles, buttons, session strip, ADR 10 arrow if present) passes contrast checks on every clock's background in both schemes (a11y addon on the chrome-on-palette stories; spot-check the darkest and lightest palettes manually).
 - [x] Arrows are ≥44 px; swipe works with touch emulation.
+
+Amendment criteria (2026-07-25, phone chrome pass):
+
+- [x] Below `sm` the clock slot starts at (0, 0) and measures the full viewport in both axes, and no chevron is in the accessibility tree; at/above `sm` both chevrons are visible at exactly 10 % opacity and still ≥44 px.
+- [x] The hint appears once at the top of the clock, its computed `pointer-events` is `none`, and its close button is a ≥44 px target; dismissing it removes it, writes `swipeHintDismissed: true`, and it stays gone across a reload.
+- [x] Every gallery e2e test flips through the swipe on the half-tablet projects and through the chevrons on the tablet ones — same assertions, both affordances.
+
+Amendment criteria (2026-07-25, scroll affordance):
+
+- [x] Below `sm`, a down arrow sits inside the first viewport hard against its bottom edge, with page left below it to scroll to; its computed `pointer-events` is `none` and it is `aria-hidden`.
+- [x] At/above `sm` it does not render (computed `display: none`) — no page scroll there, nothing to point at.
+- [x] Starting a run removes it, writes `hasStartedRun: true`, and it stays gone across a reload; Stop, `n` and New day do not bring it back.
+- [x] A blob written before the field existed reads back `hasStartedRun: false` — additive, no version bump.
 - [x] Stories exist (gallery on at least 3 visually distinct clocks, mobile layout, chrome-on-palette); tests from outline step 7 pass; the ADR 09 E2E block is active-and-green (ADR 09 landed later in the same run — see its suite).
 - [x] `npm test`, `npm run build`, `npm run build-storybook` all green.
 

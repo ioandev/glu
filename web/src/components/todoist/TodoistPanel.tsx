@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Group, Stack, UnstyledButton } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
 import { useGluStore } from "@/store/gluStore";
+import { focusedDescription } from "@/store/types";
 import { useTodoistAuth } from "@/store/todoistAuth";
 import { FocusedTaskCard } from "./FocusedTaskCard";
 import { SourcePicker } from "./SourcePicker";
@@ -83,11 +84,14 @@ export function TodoistPanel() {
       }
     : undoable
       ? {
-          key: `comment:${undoable.runId}`,
+          key: undoable.key,
           badge: `[${undoable.minutes}m]`,
-          text: "comment will be added",
-          until: undoable.postAfter,
-          onUndo: () => undo(undoable.runId),
+          // The same bar before and after the post lands (ADR 14 amendment,
+          // c) — only the tense and the mechanic behind Undo change.
+          text: undoable.phase === "queued" ? "comment will be added" : "comment added",
+          until: undoable.until,
+          error: undoable.error,
+          onUndo: () => void undo(undoable.runId),
         }
       : null;
   const total = useTimeTotal(focusedTask?.id ?? null, totalNonce);
@@ -149,7 +153,12 @@ export function TodoistPanel() {
           onComplete={(task) => void completion.complete(task)}
           onOpen={(task) => setOpenTaskId(task.id)}
           onFocus={(task) =>
-            setFocusedTask({ id: task.id, title: task.title, priority: task.uiPriority })
+            setFocusedTask({
+              id: task.id,
+              title: task.title,
+              priority: task.uiPriority,
+              description: focusedDescription(task.description),
+            })
           }
         />
       ) : null}

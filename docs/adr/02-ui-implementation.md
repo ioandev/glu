@@ -30,6 +30,18 @@
   write-on-transition) — the mechanism becomes Zustand's `persist`
   middleware. Boundary rule: the store owns shared/persisted app state;
   purely-local UI state (drawer open, popovers) stays `useState`.
+- Amended: 2026-07-25 — **the 50 ms interval becomes a `requestAnimationFrame`
+  loop** (owner report: the clock animations stepped rather than moved). A fixed
+  interval beats out of phase with the compositor, so the same value was drawn
+  twice or skipped; frame-pacing is finer (~8–17 ms), never computes a value for
+  a frame that will not be drawn, and degrades by dropping frames instead of
+  queueing work. `BACKGROUND_TICK_MS = 1000` survives underneath it as the
+  hidden-tab safety net that still lands `finish()` (ADR 18's alerts depend on
+  it). Everything else about the engine is unchanged — still recomputed from
+  `endAt`, still no per-tick store write, still ceiling-rounded digits. The
+  companion half is in ADR 07: the clocks now receive **milliseconds**, since a
+  whole-second prop caps every geometry at one move per second no matter how
+  often it re-renders.
 
 - Deviation (2026-07-24, implementation): the `glu:vN` key carries Zustand
   `persist`'s `{ state, version }` envelope rather than a bare flat object — a
@@ -48,6 +60,24 @@
 - Deviation (2026-07-24, implementation): subtracting past zero from `idle`
   (no run in flight) enters `finished` without minting a run, so it records no
   session — ADR 05's "only a completed run counts" rule wins the corner case.
+  **Superseded 2026-07-25 by ADR 32**: with no run in flight, − now clamps at
+  the one-minute floor instead. Entering the done state for a run nobody ever
+  started was always the odd behaviour here; the "records no session" half of
+  the rule is what mattered and it is now unreachable.
+- Deviation (2026-07-25, owner): the adjust row is **+1 / +5 / −1 / −5**, not
+  ±2/±5 — the small step is a one-minute nudge. Only the two labels and their
+  deltas move; every rule about what ± *does* is untouched (mid-run they apply
+  to `remaining` with `total` following, and ADR 32 owns the no-run-in-flight
+  case). Read every "±2" in this ADR, in ADR 21's retraction example and in
+  ADR 28's repro as "±1"; the singular button also drops the plural from its
+  accessible name ("Subtract 1 minute").
+- Amended: 2026-07-25 — **the ± rule below is scoped to a run in flight**
+  (ADR 32). Running or paused it is unchanged, word for word. At `idle` or
+  `finished` there is no run to trim, so ± writes `selectedDuration` as well and
+  the preset row shows the result as an eighth, custom rung. The two faults that
+  forced it — `remaining` being 0 at `finished`, and `start()` re-arming from
+  `selectedDuration` — are both still correct in isolation; only together did
+  they silently discard every adjustment made at 00:00.
 
 ## Context
 
@@ -68,19 +98,22 @@ defensible interpretation.
 ### Timer engine
 
 - **We will keep time from timestamps, not tick counting.** Running state stores
-  `endAt` (epoch ms); the UI recomputes `remaining = endAt - now` on a **50 ms
-  interval**. `setInterval(count--, 1000)` drifts and freezes in backgrounded
-  tabs; timestamp derivation is self-correcting — browsers throttle background
-  timers to ≥ 1 s, which is harmless here because every tick recomputes from the
-  clock rather than counting. The 50 ms tick is a foreground display rate — and
-  the refresh rate the future clock face will need — not a timekeeping mechanism.
+  `endAt` (epoch ms); the UI recomputes `remaining = endAt - now` **once per
+  animation frame** (2026-07-25 amendment; originally a 50 ms interval).
+  `setInterval(count--, 1000)` drifts and freezes in backgrounded tabs; timestamp
+  derivation is self-correcting — a throttled, coalesced or dropped callback is
+  harmless here because every one of them recomputes from the clock rather than
+  counting. The frame loop is a foreground display rate — the refresh rate the
+  clock faces need — not a timekeeping mechanism; a hidden tab gets no frames at
+  all, so a 1 s interval runs underneath it purely to land the end-of-run
+  transition.
 - **We will persist state to localStorage and restore it on load.** One versioned
   key (`glu:v1`) holding a JSON blob: timer status, `endAt`, `remaining`, `total`,
   selected duration, and the environment toggles — partial restoration (running
   timer but reset toggles) reads as a bug, and the cost of including toggles is
   zero. Writes happen **on state transitions only** (start/pause/stop/preset/
-  adjust/toggle), never on the 50 ms tick — `remaining` is derivable from `endAt`,
-  and 20 writes/sec is pure churn. **Mechanism (per the Zustand amendment):**
+  adjust/toggle), never on the display tick — `remaining` is derivable from
+  `endAt`, and a write per frame is pure churn. **Mechanism (per the Zustand amendment):**
   the `persist` middleware with `partialize` (the blob shape is exactly the
   persisted partition; tick-display state is excluded) and its built-in
   `version`/`migrate` (which is where the `glu:vN` migrations of ADRs 05/08/14
@@ -105,7 +138,8 @@ defensible interpretation.
 - **±2/±5 apply to `remaining`; `total` follows so the ring stays honest**
   (`total = max(total + delta, remaining, 1 min)`; remaining clamps to ≥ 0, and
   hitting 0 via −buttons completes the timer). Adjusting only `remaining` while
-  leaving `total` would make the ring fraction lie.
+  leaving `total` would make the ring fraction lie. *(ADR 32: this is the rule
+  for `running` and `paused`. Idle and finished select the next run instead.)*
 
 ### Environment toggles
 
@@ -150,7 +184,7 @@ defensible interpretation.
   are store actions. **Boundary rule, standing:** the store owns state that
   is persisted or observed by more than one surface; purely-local UI state
   (drawer/popover open, input focus) stays `useState` — a mandate for shared
-  state is not a ban on local state. **The 50 ms display value is derived
+  state is not a ban on local state. **The per-frame display value is derived
   from `endAt` outside the persisted partition** — it must never become
   persisted store state or the write-on-transition discipline dies.
   `page.tsx` stays a server component rendering a `'use client'` app shell.
@@ -181,7 +215,7 @@ defensible interpretation.
 
 ### In scope
 
-- Timer engine (timestamp-based, 50 ms foreground tick) with
+- Timer engine (timestamp-based, per-frame foreground tick) with
   idle/running/paused/finished, start/pause/stop.
 - localStorage persistence (`glu:v1`) of timer + toggle state, with restore on
   load — including a timer that ran out while the site was closed.
@@ -213,13 +247,13 @@ defensible interpretation.
 
 1. **Timer store first** — the Zustand store with the state machine as
    actions (`endAt`/`remaining`, preset/adjust/start/pause/stop), plus a
-   thin `useCountdown` hook selecting from it and running the 50 ms
-   interval that recomputes from `Date.now()` (derived display value —
-   never written back into the persisted partition). **Gotcha:** clear the interval in
+   thin `useCountdown` hook selecting from it and running the display
+   loop that recomputes from `Date.now()` (derived display value —
+   never written back into the persisted partition). **Gotcha:** cancel the loop in
    `finished`/`paused`/`idle`, and recompute-on-mount from `endAt` so a re-render
    storm or visibility change never desyncs the display. Keep mm:ss formatting
    (`Math.ceil` of seconds — `floor` shows 19:59 the instant you start a 20:00
-   timer, which reads as a bug). Keep the tick handler cheap — it runs 20×/s.
+   timer, which reads as a bug). Keep the tick handler cheap — it runs once a frame.
 2. **Persistence in the same step** — the `persist` middleware configured
    with `name: 'glu'`, `version`, `migrate`, and `partialize` to exactly
    the blob shape. Save on transitions only (holds by construction — see
@@ -265,6 +299,8 @@ the two-scheme pass (step 8) are where the real time goes; the widgets are assem
 - [x] Reload while paused: still paused at the same remaining time. Environment toggles survive the reload unchanged.
 - [x] localStorage (key `glu:v1`) is written on state transitions only — watching the Application panel during a running timer shows no per-tick writes.
 - [x] A 60 s run measured against a wall clock ends within 1 s of real time.
+- [x] (2026-07-25 amendment) The display value moves **within** a second, not only across one: sampling the active clock's geometry every frame for ~900 ms of a running timer yields a distinct value per frame (54 of 55 measured in Chromium), while the mm:ss text changes exactly once.
+- [x] (2026-07-25 amendment) With `requestAnimationFrame` stubbed to never fire — the hidden-tab case — a run still reaches `finished`, on the 1 s interval alone.
 - [x] Tapping a preset sets the timer to that duration, whether idle or running; run state is preserved.
 - [x] +2/+5/−2/−5 change the remaining time by exactly that many minutes; subtracting past zero completes the timer (the internal `remaining ≤ total` invariant is ADR 03's to test).
 - [x] Timer reaching 0:00 shows a visually distinct finished state; no sound plays.

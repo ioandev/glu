@@ -39,11 +39,14 @@
   min-width: 0;
 }
 
-/* Below `sm` the clock owns the first full viewport; everything else stacks. */
+/* Below `sm` the clock owns the first full viewport; everything else stacks.
+   Full-bleed there (ADR 08 amendment 2026-07-25): no padding and no width cap,
+   so the promised viewport is the clock and not a card floating inside it.
+   `position: relative` is the swipe hint's containing block. */
 .clockSlot {
+  position: relative;
   height: 100dvh;
   min-height: 0;
-  padding: var(--mantine-spacing-md);
   box-sizing: border-box;
 }
 
@@ -51,6 +54,7 @@
   .clockSlot {
     height: auto;
     flex: 1 1 auto;
+    padding: var(--mantine-spacing-md);
   }
 }
 
@@ -100,4 +104,22 @@
   top: var(--mantine-spacing-sm);
   right: var(--mantine-spacing-sm);
   z-index: 200;
+  /* Below `sm` the clock runs full-bleed under this corner (ADR 08 amendment),
+     so ADR 10's arrow now sits on clock paint rather than on the page. It gets
+     the same token surface the swipe hint uses, which is what keeps it legible
+     on all 18 backgrounds in both schemes. */
+  background: var(--glu-surface-strong);
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  box-shadow: var(--glu-shadow);
+  line-height: 0;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  /* Above `sm` it is back on the page background: bare, as ADR 10 drew it. */
+  .cornerToggle {
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
 }

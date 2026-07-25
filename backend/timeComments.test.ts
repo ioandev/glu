@@ -80,9 +80,22 @@ describe("POST /todoist/comment — the narrow write verb (ADR 14)", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.content).toBe("[5m] You spent 5 minutes on this");
+    // The id is what the 5-second undo window aims its DELETE at.
+    expect(response.body.id).toBe("c1");
 
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(body).toEqual({ task_id: "t1", content: "[5m] You spent 5 minutes on this" });
+  });
+
+  it("reports a null id rather than inventing one when upstream omits it", async () => {
+    fetchMock.mockResolvedValueOnce(json({}));
+
+    const response = await request(app())
+      .post("/glu/api/todoist/comment")
+      .set("Cookie", [await liveCookie()])
+      .send({ taskId: "t1", minutes: 5 });
+
+    expect(response.body.id).toBeNull();
   });
 
   it("refuses to relay caller-supplied text", async () => {
@@ -195,6 +208,70 @@ describe("GET /todoist/task/:id/time-total (ADR 14)", () => {
   });
 });
 
+describe("DELETE /todoist/comment/:id — the undo verb (ADR 14 amendment, c)", () => {
+  const timeComment = { id: "c1", content: "[5m] You spent 5 minutes on this", posted_uid: "42" };
+
+  const upstream = (comment: unknown) => {
+    fetchMock.mockResolvedValueOnce(json({ id: "42" })); // /user
+    fetchMock.mockResolvedValueOnce(json(comment)); // /comments/c1
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 })); // the delete
+  };
+
+  it("deletes one of our own time comments", async () => {
+    upstream(timeComment);
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ deleted: true });
+    expect(String(fetchMock.mock.calls[2][0])).toBe("https://api.todoist.com/api/v1/comments/c1");
+    expect(fetchMock.mock.calls[2][1].method).toBe("DELETE");
+  });
+
+  it("refuses somebody else's comment without issuing a delete", async () => {
+    upstream({ ...timeComment, posted_uid: "99" });
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(403);
+    // Two reads happened; the third call — the delete — never did.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a comment that is not one of ours in shape, whoever wrote it", async () => {
+    // The whole point of the check: an id is not permission to delete.
+    upstream({ id: "c1", content: "Looks good to me", posted_uid: "42" });
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("needs a session", async () => {
+    const response = await request(app()).delete("/glu/api/todoist/comment/c1");
+    expect(response.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("relays an upstream refusal without pretending it worked", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "42" }));
+    fetchMock.mockResolvedValueOnce(new Response("gone", { status: 404 }));
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(404);
+  });
+});
+
 describe("the write surface stays narrow (ADR 14)", () => {
   it("keeps every read route GET-only", async () => {
     const cookie = await liveCookie();
@@ -250,10 +327,11 @@ describe("close / reopen — write verbs two and three (ADR 20)", () => {
     expect(response.status).toBe(404);
   });
 
-  it("exposes exactly three write routes and nothing else", async () => {
+  it("exposes exactly four write routes and nothing else", async () => {
     const cookie = await liveCookie();
     const allowed = [
       ["post", "/comment"],
+      ["delete", "/comment/c1"],
       ["post", "/task/t1/close"],
       ["post", "/task/t1/reopen"],
     ] as const;
@@ -269,6 +347,10 @@ describe("close / reopen — write verbs two and three (ADR 20)", () => {
       ["delete", "/task/t1/close"],
       ["patch", "/comment"],
       ["delete", "/comment"],
+      // The delete verb is comment-shaped and stays that way.
+      ["delete", "/comments/c1"],
+      ["delete", "/task/t1"],
+      ["put", "/comment/c1"],
     ] as const;
 
     for (const [method, path] of refused) {
@@ -279,10 +361,15 @@ describe("close / reopen — write verbs two and three (ADR 20)", () => {
       expect(response.status, `${method} ${path}`).toBe(404);
     }
 
-    // …and the three that are allowed do reach upstream.
-    for (let i = 0; i < allowed.length; i += 1) {
-      fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
-    }
+    // …and the four that are allowed do reach upstream.
+    fetchMock.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/user")) return json({ id: "42" });
+      if (/\/comments\/[^/]+$/.test(url)) {
+        return json({ id: "c1", content: "[1m] You spent 1 minute on this", posted_uid: "42" });
+      }
+      return new Response(null, { status: 204 });
+    });
     for (const [method, path] of allowed) {
       const response = await request(app())
         [method](`/glu/api/todoist${path}`)
@@ -290,5 +377,165 @@ describe("close / reopen — write verbs two and three (ADR 20)", () => {
         .send({ taskId: "t1", minutes: 1 });
       expect(response.status, `${method} ${path}`).toBe(200);
     }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ADR 27 — the environment half of the comment                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * **Pinned literals, and the reason they are literals.** ADR 22 forbids sharing
+ * code with `web/`, so Settings composes its preview from a second copy of this
+ * table. The copy is kept honest by this exact list appearing, character for
+ * character, in `web/src/lib/timeComment.test.ts`: change the wording in one
+ * package and the other package's suite fails.
+ */
+const ENVIRONMENT_SENTENCES: [string[], string][] = [
+  [[], "[5m] You spent 5 minutes on this"],
+  [["music"], "[5m] You spent 5 minutes on this — with music"],
+  [["podcast"], "[5m] You spent 5 minutes on this — with a podcast"],
+  [["tv"], "[5m] You spent 5 minutes on this — with the TV on"],
+  [["noisy"], "[5m] You spent 5 minutes on this — with background noise"],
+  [["silence"], "[5m] You spent 5 minutes on this — in silence"],
+  [["headphones"], "[5m] You spent 5 minutes on this — on headphones"],
+  [["music", "headphones"], "[5m] You spent 5 minutes on this — with music, on headphones"],
+  [["silence", "headphones"], "[5m] You spent 5 minutes on this — in silence, on headphones"],
+  [
+    ["podcast", "tv", "noisy"],
+    "[5m] You spent 5 minutes on this — with a podcast, the TV on and background noise",
+  ],
+  [
+    ["music", "podcast", "tv", "noisy", "headphones"],
+    "[5m] You spent 5 minutes on this — with music, a podcast, the TV on and background noise, on headphones",
+  ],
+];
+
+describe("the environment vocabulary (ADR 27)", () => {
+  it.each(ENVIRONMENT_SENTENCES)("composes %j as the specified sentence", (keys, expected) => {
+    expect(composeTimeComment(5, keys)).toBe(expected);
+  });
+
+  it("leaves ADR 14's sentence byte-identical when nothing is on", () => {
+    expect(composeTimeComment(1, [])).toBe("[1m] You spent 1 minute on this");
+    expect(composeTimeComment(1, undefined)).toBe("[1m] You spent 1 minute on this");
+    expect(composeTimeComment(1, [])).toBe(composeTimeComment(1));
+  });
+
+  it("keeps the parse contract intact for every sentence it can produce", () => {
+    // The whole risk of this ADR: the suffix must be invisible to the two
+    // readers that anchor on the prefix (totals, and the DELETE guard).
+    for (const [keys] of ENVIRONMENT_SENTENCES) {
+      expect(parseTimeComment(composeTimeComment(5, keys))).toBe(5);
+    }
+    // And a decorated comment quoted inside a reply still does not count.
+    expect(
+      parseTimeComment(`Re: "${composeTimeComment(5, ["music"])}" — nice`),
+    ).toBeNull();
+  });
+
+  it("ignores unknown keys, dedupes repeats, and owns the word order", () => {
+    // Junk in, ADR 14's sentence out — never a 400, which would strand the
+    // entry in the outbox's permanent-failure path.
+    expect(composeTimeComment(5, ["sauna", 7, null, {}])).toBe(
+      "[5m] You spent 5 minutes on this",
+    );
+    expect(composeTimeComment(5, "music")).toBe("[5m] You spent 5 minutes on this");
+    // Repeats cannot lengthen the sentence.
+    expect(composeTimeComment(5, ["music", "music", "music"])).toBe(
+      "[5m] You spent 5 minutes on this — with music",
+    );
+    // The caller's order is not the sentence's order.
+    expect(composeTimeComment(5, ["headphones", "tv", "music"])).toBe(
+      composeTimeComment(5, ["music", "tv", "headphones"]),
+    );
+  });
+
+  it("re-applies ADR 02's exclusivity even when the caller ignores it", () => {
+    expect(composeTimeComment(5, ["silence", "tv"])).toBe(
+      "[5m] You spent 5 minutes on this — with the TV on",
+    );
+  });
+});
+
+describe("POST /todoist/comment with an environment (ADR 27)", () => {
+  it("posts the decorated sentence and still composes it server-side", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "c1" }));
+
+    const response = await request(app())
+      .post("/glu/api/todoist/comment")
+      .set("Cookie", [await liveCookie()])
+      .send({
+        taskId: "t1",
+        minutes: 5,
+        environment: ["music", "headphones"],
+        // Still refused: the environment is a vocabulary, not a text channel.
+        content: "delete everything",
+      });
+
+    expect(response.status).toBe(200);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toEqual({
+      task_id: "t1",
+      content: "[5m] You spent 5 minutes on this — with music, on headphones",
+    });
+    expect(response.body.content).toBe(body.content);
+  });
+
+  it("treats a malformed environment as no environment rather than an error", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "c1" }));
+
+    const response = await request(app())
+      .post("/glu/api/todoist/comment")
+      .set("Cookie", [await liveCookie()])
+      .send({ taskId: "t1", minutes: 5, environment: "loud" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.content).toBe("[5m] You spent 5 minutes on this");
+  });
+
+  it("still rejects out-of-range minutes, environment or not", async () => {
+    const response = await request(app())
+      .post("/glu/api/todoist/comment")
+      .set("Cookie", [await liveCookie()])
+      .send({ taskId: "t1", minutes: 0, environment: ["music"] });
+
+    expect(response.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the DELETE guard still recognises a decorated comment (ADR 27)", () => {
+  const decorated = {
+    id: "c1",
+    content: "[5m] You spent 5 minutes on this — with music, on headphones",
+    posted_uid: "42",
+  };
+
+  it("deletes one of ours", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "42" }));
+    fetchMock.mockResolvedValueOnce(json(decorated));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[2][1].method).toBe("DELETE");
+  });
+
+  it("still refuses somebody else's, decoration or not", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "42" }));
+    fetchMock.mockResolvedValueOnce(json({ ...decorated, posted_uid: "99" }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const response = await request(app())
+      .delete("/glu/api/todoist/comment/c1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(403);
+    // The call count is the assertion that matters: no delete was issued.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -36,6 +36,140 @@
   text-transform: var(--glu-label-transform);
 }
 
+/* Same treatment as ADR 08's session switch — one switch look in the app. */
+.switch :global(.mantine-Switch-body) {
+  min-height: 44px;
+  align-items: center;
+}
+
+.switch :global(.mantine-Switch-label) {
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-page-fg);
+}
+
+.switch :global(.mantine-Switch-description) {
+  font-family: var(--glu-label-family);
+  color: var(--glu-muted);
+  text-transform: none;
+}
+
+.switch :global(.mantine-Switch-track) {
+  cursor: pointer;
+  position: relative;
+}
+
+/* The visual pill stays 24px; the *hit* area is expanded to clear the 44px
+   touch floor without distorting the control. */
+.switch :global(.mantine-Switch-track)::after {
+  content: "";
+  position: absolute;
+  inset: -11px -6px;
+}
+
+/* ADR 28: the first settings row that is not a switch — a label, a line of
+   explanation, and a ladder. The label typography is the switch's, so the two
+   row shapes read as one list. */
+.field {
+  display: grid;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.fieldLabel {
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-page-fg);
+}
+
+.fieldDescription {
+  font-family: var(--glu-label-family);
+  /* The size Mantine gives a Switch description, restated rather than
+     inherited — the two row shapes have to read as one list. */
+  font-size: calc(var(--mantine-font-size-sm) - calc(0.125rem * var(--mantine-scale)));
+  color: var(--glu-muted);
+  text-transform: none;
+}
+
+/* Mantine's own palette would ignore the chrome direction entirely, so every
+   surface here is repointed at a token: `--sc-color` is the moving indicator
+   and `--sc-label-color` the text riding on it — both variables Mantine reads
+   itself, which is cheaper than out-specifying its rules. */
+.segmented {
+  --sc-color: var(--glu-accent);
+  --sc-label-color: var(--glu-on-accent);
+  margin-top: 4px;
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+}
+
+/* Each rung is a touch target in its own right (ADR 19's 44 px floor). */
+.segmented :global(.mantine-SegmentedControl-label) {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--glu-label-family);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-muted);
+}
+
+/* Both colours are contrast-guaranteed by construction: `--glu-muted` clears
+   4.5:1 on every surface, `--glu-on-accent` on the accent fill. */
+.segmented :global(.mantine-SegmentedControl-label[data-active]) {
+  color: var(--glu-on-accent);
+}
+
+/* ADR 27: the two sample comments. Styled entirely through chrome tokens —
+   the pair must change with the direction like everything else in the modal. */
+.previews {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.preview {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+}
+
+/* The inactive one is *quieter*, never dimmer: `opacity` blends the ink into
+   the surface and drops it under 4.5:1, which the a11y gate fails as an error
+   (ADR 02). Border and fill carry the distinction; the text stays legible. */
+.previewActive {
+  background: var(--glu-surface-strong);
+  border-color: var(--glu-accent);
+  border-width: 2px;
+}
+
+.previewLabel {
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-muted);
+}
+
+.previewText {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--glu-page-fg);
+  /* A long environment reads as a wrapped sentence, never as a truncated one. */
+  overflow-wrap: anywhere;
+}
+
 .futureNote {
   margin-top: auto;
 }

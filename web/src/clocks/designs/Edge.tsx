@@ -28,14 +28,14 @@ const H = 460;
 const PERIMETER = 2 * (W - 6) + 2 * (H - 6);
 
 export function Edge({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={edgeTheme} accent={accent} state={state}>

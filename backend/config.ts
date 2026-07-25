@@ -23,6 +23,13 @@ export const REFRESH_SKEW_MS = 60_000;
 export interface ServerConfig {
   clientId: string;
   clientSecret: string;
+  /**
+   * The App Management Console's per-app **verification token**. Optional:
+   * empty means the OAuth `state` stays a bare nonce, which is ADR 11's
+   * original shape and behaves identically. See `mintState` in `session.ts`
+   * for why the token is signed into the state rather than sent as it.
+   */
+  verificationToken: string;
   sessionSecret: string;
   publicOrigin: string;
   port: number;
@@ -89,6 +96,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   return {
     clientId: env.TODOIST_CLIENT_ID ?? "",
     clientSecret: env.TODOIST_CLIENT_SECRET ?? "",
+    verificationToken: env.TODOIST_VERIFICATION_TOKEN ?? "",
     sessionSecret: usable ? supplied : DEV_SESSION_SECRET,
     publicOrigin: origin,
     port: Number(env.API_PORT ?? 4000),

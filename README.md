@@ -11,12 +11,14 @@ split view, so phone-ish widths are a first-class layout too.
   **18 hand-built clock designs** (ADR 07) in a flip-through gallery that
   repaints the whole site with the active clock's palette (ADR 08). Preset
   durations (5, 10, 15, 20, 30, 45, 60 minutes)
-  above the timer, and +2 / +5 / −2 / −5 minute adjustment buttons below it. A
+  above the timer, and +1 / +5 / −1 / −5 minute adjustment buttons below it. A
   running timer survives reloads and even closing the site — state lives in
   localStorage. When time's up, a chime sounds (and a notification appears
   if you're a tab away, ADR 18); the screen stays awake through a session
   (ADR 17). In the final minute, the background floods the screen until
-  only the clock remains — tap anywhere to peek at the controls (ADR 21).
+  only the clock remains — tap anywhere to bring the controls back for the
+  rest of the run (ADR 21). Tablet layout only: below `sm` the clock already
+  owns the first viewport, so there is nothing to flood.
 - **Environment tracking** — toggles recording what your surroundings were during a
   session: Music, Podcast, TV, Silence (untoggles the others), Noisy, Headphones.
 - **Session tracking** — each completed countdown is recorded (with its
@@ -108,7 +110,9 @@ logged-out state and nothing errors. To make login work:
    - production redirect URI: `https://ioan.dev/glu/api/auth/todoist/callback`
 2. `just backend env` (or `cp backend/.env.example backend/.env`) and fill in
    `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET` and a fresh `SESSION_SECRET` —
-   `just backend secret` prints one.
+   `just backend secret` prints one. Optionally add the console's
+   `TODOIST_VERIFICATION_TOKEN`, which signs the OAuth state nonce; login works
+   the same without it.
 3. `just dev` and click **Log in with Todoist**.
 
 The access token never reaches the browser: it lives in a sealed httpOnly

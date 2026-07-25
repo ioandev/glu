@@ -156,7 +156,7 @@ to grow, not to block on the whole roadmap.
    lifecycle driven by `clock.fastForward`; the three reload-restore
    branches via seeded storage + real `page.reload()`; Silence exclusivity;
    theme persistence. **Gotcha:** after `fastForward` past zero, assert on
-   the `finished` UI state, not on elapsed wall time — the 50 ms tick is
+   the `finished` UI state, not on elapsed wall time — the display tick is
    display cadence, not the source of truth.
 4. **Feature flow blocks** for 04/05/06/08, written now, `test.skip` with the
    ADR status as the reason string, activated as each ADR lands (activation is

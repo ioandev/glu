@@ -55,7 +55,7 @@ export function TakeoverOverlay({
       data-phase={phase}
       data-reduced-motion={reducedMotion || undefined}
       data-testid="takeover-overlay"
-      // Not announced, but it does capture pointer events: that is the peek
+      // Not announced, but it does capture pointer events: that is the dismiss
       // trigger, and it prevents ghost-taps on covered controls (ADR 21).
       aria-hidden="true"
       style={style as React.CSSProperties}

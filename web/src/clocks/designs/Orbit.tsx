@@ -29,14 +29,14 @@ const OUTER_C = 2 * Math.PI * OUTER;
 const INNER_C = 2 * Math.PI * INNER;
 
 export function Orbit({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   // The inner ring fills with the day's sessions, capped at eight.
   const dayFraction = Math.min(1, session / 8);
 

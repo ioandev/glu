@@ -238,6 +238,107 @@
   width: 280px;
 }
 
+/* Below `sm` the same picker is a modal that owns nearly the whole screen (ADR
+   12 amendment): a 280px dropdown with a 220px inner list is the wrong
+   instrument on a half-tablet, where the source list is the only thing on
+   screen worth reading. Same responsive-furniture split as ADR 13's detail. */
+.pickerModal {
+  /* Mantine sizes the dialog with `flex: 0 0 var(--modal-size)`, and a
+     flex-basis outranks `width` on a flex item — releasing the basis is what
+     lets our own width take effect. */
+  flex: 0 0 auto;
+  width: min(560px, 94vw);
+  height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+}
+
+.pickerModalHeader {
+  background: transparent;
+  color: var(--glu-page-fg);
+  font-family: var(--glu-heading-family);
+}
+
+.pickerModalBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.pickerSearch {
+  /* Mantine sizes its combobox search against `--combobox-padding`, a variable
+     only `Combobox.Dropdown` sets — and there is no dropdown here, so the width
+     has to be stated. */
+  width: 100%;
+  min-height: 48px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  /* 16px is the floor: anything smaller and iOS zooms the page on focus, which
+     on a half-tablet leaves the modal off-centre and the list half off-screen. */
+  font-size: 16px;
+}
+
+.pickerSearch::placeholder {
+  color: var(--glu-muted);
+}
+
+/* The list, not the dropdown, is the screen here: it takes every pixel the
+   modal can spare and scrolls internally. */
+.pickerOptions {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pickerOption {
+  display: flex;
+  align-items: center;
+  /* Thumb-sized, above the 44px floor — this is the one list that gets tapped
+     at arm's length on a tablet. */
+  min-height: 48px;
+  padding: 0 14px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+/* Mantine's own combobox data-attributes: `active` is the source in use,
+   `selected` is where the keyboard cursor sits. */
+.pickerOption[data-combobox-active] {
+  border-color: var(--glu-accent);
+  color: var(--glu-accent-text);
+}
+
+.pickerOption[data-combobox-selected] {
+  outline: 2px solid var(--glu-accent);
+  outline-offset: -2px;
+}
+
+.pickerEmpty {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 4px;
+  font-size: 13px;
+  color: var(--glu-muted);
+}
+
 /* --- Task detail (ADR 13) ------------------------------------------------- */
 
 .detailPanel {
@@ -357,17 +458,38 @@
   gap: 10px;
 }
 
-.focusedTitle {
+/* The list card's `.cardBody` anatomy, at the focused card's scale: the whole
+   text column — title and description — is one tap target. */
+.focusedBody {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
-  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
   text-align: left;
   color: var(--glu-page-fg);
   min-height: 44px;
-  display: flex;
-  align-items: center;
+}
+
+.focusedTitle {
+  font-size: 15px;
+  font-weight: 500;
   overflow-wrap: anywhere;
+}
+
+/* Two clamped lines where a list card gets one (ADR 12): this is the task you
+   are actually working on, and the pinned card has the room. Still CSS clamp,
+   never JS measurement. */
+.focusedDescription {
+  font-size: 12px;
+  color: var(--glu-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pendingBadge {

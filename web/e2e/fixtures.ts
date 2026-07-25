@@ -19,6 +19,27 @@ type GluFixtures = {
  * basePath — the footgun ADR 09 called out. Every test goes through here.
  */
 async function openPath(page: Page, path = ".") {
+  // ADR 31 put a welcome gate in front of `/glu`, and this helper waits on the
+  // clock — so without this, a test that seeds nothing sits on the landing page
+  // until it times out. Every existing test means to be a *returning* user,
+  // which is the app's normal state, so that is what `open()` provides.
+  //
+  // Registered here rather than in the fixture's setup, and that ordering is
+  // the whole trick: init scripts run in registration order, and a test's own
+  // `seedStorage()` call happens in the test body — after setup, before
+  // `open()`. Planting this first would make the real seed's
+  // "only-if-nothing-there" guard skip, silently replacing every seeded blob
+  // with this stub. The guard below is the mirror image: an explicit seed wins,
+  // untouched.
+  await page.addInitScript(() => {
+    const seeded = Object.keys(window.localStorage).some((k) => k.startsWith("glu:v"));
+    if (seeded) return;
+    // A partial state is fine — `persist` merges it over the store's defaults.
+    window.localStorage.setItem(
+      "glu:v2",
+      JSON.stringify({ state: { hasEnteredApp: true }, version: 2 }),
+    );
+  });
   // `load`, not `networkidle`: the app keeps no long-lived connections, and
   // networkidle is both discouraged by Playwright and hostage to any single
   // slow request (the Todoist `/status` probe, for one). Every assertion after
@@ -117,6 +138,15 @@ export const defaultState = {
   chromeThemeId: "studio-quiet",
   activeClockId: "halo",
   showSessionOnClock: true,
+  swipeHintDismissed: false,
+  hasStartedRun: false,
+  // ADR 31: a seeded blob is a returning user by definition. A test that wants
+  // the welcome gate seeds nothing and drives `page.goto` directly.
+  hasEnteredApp: true,
+  stayAwakeAlways: false,
+  stayAwakeWhileRunning: true,
+  commentEnvironment: true,
+  commentThresholdMinutes: 1,
   todoistSource: null,
   focusedTask: null,
   outbox: [],

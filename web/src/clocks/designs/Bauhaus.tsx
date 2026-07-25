@@ -24,14 +24,14 @@ export const bauhausTheme: ClockTheme = {
 };
 
 export function Bauhaus({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   const rotation = p.elapsedFraction * 360 - 90;
 
   return (

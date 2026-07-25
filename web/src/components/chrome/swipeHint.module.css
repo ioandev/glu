@@ -1,0 +1,51 @@
+/* Chrome-token styled (ADR 15): the surface, border, radius and label treatment
+   all come from the active direction, so the hint reads as part of whichever
+   chrome is on. */
+
+.hint {
+  position: absolute;
+  /* `env()` keeps it clear of a notch when the clock runs full-bleed. */
+  top: max(var(--mantine-spacing-sm), env(safe-area-inset-top, 0px));
+  left: var(--mantine-spacing-sm);
+  /* Room for ADR 10's corner arrow, which is fixed at the same corner and wins
+     the z-order — the hint centres inside what is left. */
+  right: calc(var(--mantine-spacing-sm) + 52px);
+  margin-inline: auto;
+  width: fit-content;
+  max-width: 100%;
+  z-index: 150;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 14px;
+  box-sizing: border-box;
+
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  box-shadow: var(--glu-shadow);
+
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  line-height: 1.3;
+
+  /* The hint teaches a gesture; it must not be the thing that eats it. */
+  pointer-events: none;
+}
+
+.text {
+  min-width: 0;
+}
+
+.close {
+  /* The one live target on an otherwise inert banner. */
+  pointer-events: auto;
+  flex: none;
+  color: var(--glu-muted);
+  border-radius: var(--glu-control-radius);
+}

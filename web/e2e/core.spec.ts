@@ -21,7 +21,9 @@ test.describe("app loads under /glu", () => {
 
     await open();
 
-    await expect(page).toHaveTitle("GLU");
+    // ADR 30 replaced the bare "GLU": two characters is a fine tab label and a
+    // useless search result. The rest of the head is asserted in metadata.spec.
+    await expect(page).toHaveTitle("GLU — pomodoro and focus timer");
     await expect(page.getByTestId("clock-slot")).toBeVisible();
     expect(failures, "no request may 404 during load").toEqual([]);
     expect(consoleErrors).toEqual([]);
@@ -69,7 +71,7 @@ test.describe("timer lifecycle", () => {
     await open();
     await page.getByRole("button", { name: "Start" }).click();
     await page.clock.fastForward("20:01");
-    // Assert on the finished UI state, not elapsed wall time — the 50 ms tick is
+    // Assert on the finished UI state, not elapsed wall time — the display tick is
     // display cadence, not the source of truth (ADR 09).
     await expect(page.getByTestId("clock-slot")).toContainText("00:00");
     expect((await readBlob(page))?.status).toBe("finished");
@@ -92,8 +94,40 @@ test.describe("timer lifecycle", () => {
     await page.getByRole("button", { name: "10m", exact: true }).click();
     await page.getByRole("button", { name: /Add 5 minutes/ }).click();
     await expect(page.getByTestId("clock-slot")).toContainText("15:00");
-    await page.getByRole("button", { name: /Subtract 2 minutes/ }).click();
-    await expect(page.getByTestId("clock-slot")).toContainText("13:00");
+    await page.getByRole("button", { name: /Subtract 1 minute/ }).click();
+    await expect(page.getByTestId("clock-slot")).toContainText("14:00");
+  });
+
+  test("± at 00:00 sets the next run, and the row shows it (ADR 32)", async ({ page, open }) => {
+    await open();
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+
+    // The takeover owns the whole page at 00:00 above `sm` (ADR 21); one tap is
+    // what a real user does to reach the controls under it.
+    await page.getByTestId("clock-slot").click();
+
+    const custom = page.getByRole("button", { name: "3m", exact: true });
+    await expect(custom).toHaveCount(0);
+    await page.getByRole("button", { name: /Subtract 1 minute/ }).click();
+    await page.getByRole("button", { name: /Subtract 1 minute/ }).click();
+
+    // The reported bug, end to end: the adjustment has to survive Start.
+    await expect(custom).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("clock-slot")).toContainText("03:00");
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("00:10");
+    await expect(page.getByTestId("clock-slot")).toContainText("02:50");
+    await expect(custom).toHaveAttribute("aria-pressed", "true");
+
+    await page.getByRole("button", { name: "Stop" }).click();
+    await expect(page.getByTestId("clock-slot")).toContainText("03:00");
+
+    // Back on the ladder, the custom rung has nothing left to show.
+    await page.getByRole("button", { name: "10m", exact: true }).click();
+    await expect(custom).toHaveCount(0);
   });
 });
 

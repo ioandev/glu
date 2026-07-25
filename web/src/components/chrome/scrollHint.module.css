@@ -1,0 +1,62 @@
+/* Chrome-token styled (ADR 15): surface, border, radius and muted ink all come
+   from the active direction, so the arrow reads as part of whichever chrome is
+   on — and, like ADR 10's corner arrow, it needs that surface because below
+   `sm` it sits on clock paint rather than on the page (36 palette × scheme
+   combinations, one treatment). */
+
+.hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Sits on the fold it is pointing past; `env()` clears a home indicator. */
+  bottom: max(var(--mantine-spacing-md), env(safe-area-inset-bottom, 0px));
+  z-index: 150;
+
+  display: flex;
+  justify-content: center;
+
+  /* The clock slot is a swipe surface; the arrow must not claim the gesture. */
+  pointer-events: none;
+}
+
+/* Above `sm` there is no page scroll (ADR 02's contract, which ADR 08 changed
+   below `sm` only) — nothing below the fold, so nothing to point at. */
+@media (min-width: $mantine-breakpoint-sm) {
+  .hint {
+    display: none;
+  }
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+
+  background: var(--glu-surface-strong);
+  color: var(--glu-muted);
+  border: var(--glu-border);
+  border-radius: 999px;
+  box-shadow: var(--glu-shadow);
+
+  animation: scroll-nudge 2.4s ease-in-out infinite;
+}
+
+/* A short, slow fall — enough to read as "keep going down", quiet enough to
+   lose an argument with the clock. */
+@keyframes scroll-nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip {
+    animation: none;
+  }
+}

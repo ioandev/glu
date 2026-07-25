@@ -152,6 +152,25 @@ export async function todoistPost<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * ADR 14 amendment (2026-07-25c): the first destructive verb the proxy can
+ * speak. It stays a plumbing helper on purpose — the decision about *what* may
+ * be deleted lives in the route, next to the check that enforces it.
+ */
+export async function todoistDelete(tokens: TokenSet, path: string): Promise<void> {
+  const response = await withTimeout((signal) =>
+    fetch(`${TODOIST_API_BASE}${path}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${tokens.accessToken}` },
+      signal,
+    }),
+  );
+
+  if (!response.ok) {
+    throw new TodoistError(`Todoist DELETE ${path} failed`, response.status);
+  }
+}
+
 export interface TodoistUser {
   id: string;
   full_name?: string;

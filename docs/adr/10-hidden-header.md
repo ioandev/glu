@@ -5,6 +5,19 @@
 - Amended: 2026-07-24 — the Settings placeholder is superseded: **ADR 19**
   fills the modal (Todoist log out/in, near-full-size layout); this ADR's
   "placeholder text" criterion applies only until 19 lands.
+- Amended: 2026-07-25 — **"exactly three entries" now means exactly three
+  *action rows*.** ADR 26 adds a legal footer (Privacy Policy, Terms of
+  Service) below them, in its own `<nav aria-label="Legal">`: references, not
+  actions, deliberately kept out of the row treatment so the drawer does not
+  become the junk drawer this ADR warned about. The acceptance criterion and
+  the E2E test name were updated in place.
+- Amended: 2026-07-25 — **four action rows.** ADR 29 adds **Docs** above
+  Settings, opening the manual as a modal (Settings' twin). It is a row rather
+  than a legal-footer link because it opens an overlay instead of navigating
+  away, and a footer where one link opened a tab and its neighbour opened a
+  modal would teach nothing. The acceptance criterion and the E2E test name
+  were updated in place again. **This is the ceiling** — the next addition
+  either replaces a row or the drawer becomes the junk drawer.
 
 - Deviation (2026-07-24, implementation): Mantine's Drawer/Modal close buttons
   ship without an accessible name; both are given explicit `aria-label`s, which
@@ -89,7 +102,7 @@ this ADR introduces the project's first icon dependency.
   controllable with chrome open; this is a feature, not a leak. No new
   shortcuts (any addition goes through an ADR 06 amendment, per its rule).
 - **The timer does not care that chrome exists**: drawer and modal must not
-  mount/unmount the timer tree or interrupt the 50 ms tick — they render
+  mount/unmount the timer tree or interrupt the display tick — they render
   through portals beside it, not around it.
 
 ## Options considered
@@ -170,7 +183,7 @@ rest. Nothing here is risky; it's all discipline work.
 ## Acceptance criteria
 
 - [x] On load (and after any reload), no header is visible; the only new chrome is a ≥44 px arrow `ActionIcon` in the extreme top-right corner; timer, toggles, and reserved space render exactly as before (no layout shift — compare screenshots).
-- [x] Tapping the arrow slides a panel in from the right edge; it contains exactly three entries: GitHub, theme, Settings.
+- [x] Tapping the arrow slides a panel in from the right edge; it contains exactly four action entries: GitHub, theme, Docs, Settings (plus ADR 26's legal footer) — per the two 2026-07-25 amendments.
 - [x] The GitHub entry shows a GitHub icon, navigates to `https://github.com/ioandev/glu` in a new tab, and carries `rel="noopener noreferrer"`.
 - [x] The theme entry switches dark/light instantly; the choice survives reload; no theme control exists outside the drawer anymore.
 - [x] Settings opens a Mantine modal containing placeholder text (until ADR 19 fills it later in the same run); it closes via Escape, overlay click, and its close button.

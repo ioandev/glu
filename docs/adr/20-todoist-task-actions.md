@@ -65,7 +65,12 @@ to the task's lifecycle (interplay below).
   grace-delay. The grace existed because comments had no inverse short of a
   delete verb; completion has a native inverse (`reopen`), so the action
   lands instantly (the satisfying part) and undo is a real API call, not a
-  cancellation. Same 10-second bar, different mechanics.
+  cancellation. Same bar, different mechanics. (**ADR 14 amendment c,
+  2026-07-25**, has since narrowed the gap from the other side: comments now
+  post after 2 s and get a 5-second *delete* window, so the two message types
+  differ mainly in that a comment can still be cancelled before it exists.
+  This ADR's window is untouched at 10 s — `COMPLETION_UNDO_MS`, split out of
+  the shared `UNDO_GRACE_MS` there.)
 - **The ADR 14 bar becomes a shared `UndoBar` host** (message + action,
   one visible at a time, newest wins — amended there). Cross-type
   displacement composes with 14's rule: a completion bar displacing a
@@ -199,7 +204,7 @@ an hour.
 - [x] A running timer is unaffected by any completion path (remaining keeps decreasing; the no-transition spy passes).
 - [x] Cross-type displacement: run-end comment bar displaced by a completion → the comment posts immediately (stub asserts); completion bar displaced by a run-end comment bar → no reopen fires, comment bar behaves per ADR 14.
 - [x] A refetch landing mid-completion does not resurrect the card (race test with delayed fixture).
-- [x] The proxy accepts exactly three write routes (comment, close, reopen) and rejects all other verbs/paths (supertest matrix extended).
+- [x] The proxy accepts exactly three write routes (comment, close, reopen) and rejects all other verbs/paths (supertest matrix extended). *(ADR 14 amendment c added a fourth, `DELETE …/comment/:id`; the matrix lives in `backend/timeComments.test.ts` and now asserts four.)*
 - [x] Complete-tap and focus-tap targets are both ≥44 px and non-overlapping at 590 px.
 - [x] Stories cover completing/completed/error states and both displacement directions, both schemes; `npm test`, `npm run build`, `npm run build-storybook` green; the ADR 09 block is active and green.
 - [~] This ADR is updated at implementation with the observed Todoist behavior for fetching a completed task by id. — **[deferred → HUMAN-TODO]**; the ADR records "unverified tonight, both outcomes degrade acceptably" at the top.

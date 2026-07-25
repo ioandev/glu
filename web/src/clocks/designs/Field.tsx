@@ -23,8 +23,8 @@ export const fieldTheme: ClockTheme = {
   },
 };
 
-export function Field({ remainingSeconds, totalSeconds, state, accent }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+export function Field({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={fieldTheme} accent={accent} state={state}>

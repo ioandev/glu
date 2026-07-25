@@ -23,8 +23,8 @@ export const sunsetTheme: ClockTheme = {
   },
 };
 
-export function Sunset({ remainingSeconds, totalSeconds, state, accent }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+export function Sunset({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const p = clockProgress(remainingMs, totalMs);
   // 8% at the start of the run, just above the horizon at the end.
   const top = 8 + p.elapsedFraction * 55;
 

@@ -11,10 +11,52 @@ async function dismissTakeover(page: import("@playwright/test").Page) {
   // Retry: the entrance sweep can still be settling when we arrive, and a click
   // mid-animation is swallowed. Poll until the overlay is genuinely gone.
   for (let attempt = 0; attempt < 5 && (await overlay.count()) > 0; attempt += 1) {
-    await overlay.click({ position: { x: 5, y: 5 }, force: true }).catch(() => {});
+    await tapClock(page).catch(() => {});
     await overlay.waitFor({ state: "detached", timeout: 1500 }).catch(() => {});
   }
   await expect(overlay).toHaveCount(0);
+}
+
+/**
+ * Taps the clock itself — the gesture that dismisses a takeover at any width
+ * (ADR 21 amendment). Aiming at the *overlay* only works where some of it is
+ * still exposed: below `sm` the clock is the whole first viewport and rides
+ * above it (ADR 08 × ADR 21), so there is no overlay pixel left to press.
+ *
+ * Scrolls to the top first: below `sm` the page scrolls, and a click that
+ * reached a control lower down leaves the clock off-screen.
+ */
+async function tapClock(page: import("@playwright/test").Page) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = (await page.getByTestId("clock-slot").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+/** Mantine's `sm`, in px — the line the gallery chrome lives above (ADR 08). */
+const SM_BREAKPOINT = 768;
+
+/**
+ * Flips one clock forward (`1`) or back (`-1`) the way this viewport can.
+ *
+ * Below `sm` there are no chevrons at all (ADR 08 amendment) — the swipe is the
+ * only flip, which is what the half-tablet projects exercise for free by
+ * running the same tests through here.
+ */
+async function flipClock(page: import("@playwright/test").Page, step: 1 | -1) {
+  if ((page.viewportSize()?.width ?? 0) >= SM_BREAKPOINT) {
+    const name = step === 1 ? "Next clock design" : "Previous clock design";
+    await page.getByRole("button", { name }).click();
+    return;
+  }
+
+  const box = (await page.getByTestId("clock-slot").boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  // Dragging left moves forward through the registry, like a carousel.
+  await page.mouse.move(cx - step * 120, cy, { steps: 8 });
+  await page.mouse.up();
 }
 
 
@@ -221,7 +263,7 @@ test.describe("clock gallery (ADR 08)", () => {
     await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "halo");
     const before = await pageBackground(page);
 
-    await page.getByRole("button", { name: "Next clock design" }).click();
+    await flipClock(page, 1);
     await expect(page.getByTestId("clock-slot")).not.toHaveAttribute("data-clock-id", "halo");
     await expect.poll(() => pageBackground(page)).not.toBe(before);
 
@@ -232,9 +274,9 @@ test.describe("clock gallery (ADR 08)", () => {
 
   test("wraps at both ends", async ({ page, open }) => {
     await open();
-    await page.getByRole("button", { name: "Previous clock design" }).click();
+    await flipClock(page, -1);
     await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "edge");
-    await page.getByRole("button", { name: "Next clock design" }).click();
+    await flipClock(page, 1);
     await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "halo");
   });
 
@@ -249,7 +291,7 @@ test.describe("clock gallery (ADR 08)", () => {
     await open();
     await page.getByRole("button", { name: "Start" }).click();
     await page.clock.fastForward("00:30");
-    await page.getByRole("button", { name: "Next clock design" }).click();
+    await flipClock(page, 1);
     await page.clock.fastForward("00:30");
     await expect(page.getByTestId("clock-slot")).toContainText("19:00");
   });
@@ -284,6 +326,80 @@ test.describe("clock gallery (ADR 08)", () => {
     await expect(slot).toHaveAttribute("data-clock-id", after!);
   });
 
+  /* ADR 08 amendment (2026-07-25) — full-bleed phone clock, quiet chevrons. */
+
+  test("the gallery chrome matches the viewport", async ({ page, open }) => {
+    await open();
+    const next = page.getByRole("button", { name: "Next clock design" });
+
+    if ((page.viewportSize()?.width ?? 0) >= SM_BREAKPOINT) {
+      // Present enough to be found, quiet enough not to compete with the clock.
+      await expect(next).toBeVisible();
+      expect(await next.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.1");
+      return;
+    }
+
+    // Below `sm`: no chevrons, and the clock *is* the first viewport.
+    await expect(next).toHaveCount(0);
+    const viewport = page.viewportSize()!;
+    const box = (await page.getByTestId("clock-slot").boundingBox())!;
+    expect(Math.round(box.x)).toBe(0);
+    expect(Math.round(box.y)).toBe(0);
+    expect(Math.round(box.width)).toBe(viewport.width);
+    expect(Math.round(box.height)).toBe(viewport.height);
+  });
+
+  test("the swipe hint shows once, then never again", async ({ page, open }) => {
+    await open();
+    const hint = page.getByTestId("swipe-hint");
+    await expect(hint).toBeVisible();
+
+    // It rides at the top of the clock — below `sm` that is the top of the page.
+    const slot = (await page.getByTestId("clock-slot").boundingBox())!;
+    const box = (await hint.boundingBox())!;
+    expect(box.y).toBeLessThan(slot.y + 60);
+    // And it is inert, so the gesture it teaches passes straight through it.
+    expect(await hint.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+
+    await page.getByRole("button", { name: "Dismiss tip" }).click();
+    await expect(hint).toHaveCount(0);
+
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByTestId("swipe-hint")).toHaveCount(0);
+    expect(await readBlob(page)).toMatchObject({ swipeHintDismissed: true });
+  });
+
+  test("the scroll arrow points past the fold until the first run", async ({ page, open }) => {
+    await open();
+    const hint = page.getByTestId("scroll-hint");
+
+    if ((page.viewportSize()?.width ?? 0) >= SM_BREAKPOINT) {
+      // No page scroll up here (ADR 02's contract), so nothing to point at.
+      expect(await hint.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+      return;
+    }
+
+    await expect(hint).toBeVisible();
+    // It rides the bottom edge of the first viewport, and there is really more
+    // page below it.
+    const slot = (await page.getByTestId("clock-slot").boundingBox())!;
+    const box = (await hint.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(slot.y + slot.height);
+    expect(slot.y + slot.height - (box.y + box.height)).toBeLessThan(60);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(
+      page.viewportSize()!.height,
+    );
+    // Inert, so the swipe it sits on top of passes straight through.
+    expect(await hint.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(hint).toHaveCount(0);
+
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByTestId("scroll-hint")).toHaveCount(0);
+    expect(await readBlob(page)).toMatchObject({ hasStartedRun: true });
+  });
+
   /* ADR 25 — the flip slides. */
 
   test("a flip mounts a departing layer and settles back to one clock", async ({ page, open }) => {
@@ -292,7 +408,7 @@ test.describe("clock gallery (ADR 08)", () => {
     const layers = slot.locator("[data-role]");
     await expect(layers).toHaveCount(1);
 
-    await page.getByRole("button", { name: "Next clock design" }).click();
+    await flipClock(page, 1);
     await expect(slot.locator('[data-role="leaving"]')).toHaveAttribute(
       "data-direction",
       "forward",
@@ -335,6 +451,22 @@ test.describe("PWA collateral (ADR 04)", () => {
     const manifest = await manifestResponse.json();
     expect(manifest.start_url).toContain("/glu");
     expect(manifest.display).toBe("standalone");
+
+    // The launch path must land *inside* `scope` without a redirect. Next serves
+    // the app at `/glu` and 308s `/glu/` onto it, so a `start_url` of `/glu/`
+    // with a `scope` of `/glu/` launches out of scope — and Chrome answers an
+    // out-of-scope WebAPK launch with its in-app toolbar (title + origin, ✕, ⋮)
+    // instead of standalone. That shipped, and this is the tripwire (2026-07-25
+    // amendment). Scope is a plain path prefix: `/glu/` does not contain `/glu`.
+    const startUrl = new URL(manifest.start_url, baseURL).toString();
+    const launch = await request.get(startUrl);
+    expect(launch.status(), `${manifest.start_url} must serve the app directly`).toBe(200);
+    expect(launch.url(), `${manifest.start_url} must not redirect on launch`).toBe(startUrl);
+    const scopePath = new URL(manifest.scope, baseURL).pathname;
+    expect(
+      new URL(launch.url()).pathname.startsWith(scopePath),
+      `${manifest.start_url} must be within scope ${manifest.scope}`,
+    ).toBe(true);
 
     // Manifest-internal URLs are relative, so they resolve under /glu/ by spec.
     const purposes = (manifest.icons as { src: string; purpose: string; sizes: string }[]).map(
@@ -551,7 +683,10 @@ test.describe("header drawer (ADR 10)", () => {
     await expect(page.getByRole("button", { name: /Switch to (light|dark) theme/ })).toHaveCount(0);
   });
 
-  test("opens with exactly three entries, GitHub linked safely", async ({ page, open }) => {
+  // ADR 10 said "exactly three entries"; ADR 26 amended it to three *action
+  // rows* plus a legal footer, and ADR 29 added a fourth row (Docs). The footer
+  // and the Docs modal are asserted in their own blocks below.
+  test("opens with exactly four action rows, GitHub linked safely", async ({ page, open }) => {
     await open();
     await page.getByRole("button", { name: "Open header" }).click();
 
@@ -563,6 +698,7 @@ test.describe("header drawer (ADR 10)", () => {
     await expect(github).toHaveAttribute("target", "_blank");
     await expect(github).toHaveAttribute("rel", "noopener noreferrer");
     await expect(drawer.getByText("Appearance")).toBeVisible();
+    await expect(drawer.getByText("Docs")).toBeVisible();
     await expect(drawer.getByText("Settings")).toBeVisible();
   });
 
@@ -739,6 +875,30 @@ test.describe("settings (ADR 19)", () => {
     await expect(settingsLogin).toHaveText(/Log in with Todoist/);
   });
 
+  test("the Screen section toggles land in the blob (ADR 17 amendment)", async ({
+    page,
+    open,
+  }) => {
+    await stubStatus(page, { authenticated: false });
+    await open();
+    await openSettings(page);
+
+    const always = page.getByRole("switch", { name: "Stay awake on the website" });
+    const whileRunning = page.getByRole("switch", {
+      name: "Stay awake when the timer is running",
+    });
+    // The defaults are the shipped ADR 17 policy: the run holds the screen.
+    await expect(always).not.toBeChecked();
+    await expect(whileRunning).toBeChecked();
+
+    await always.click();
+    await whileRunning.click();
+
+    await expect
+      .poll(async () => (await readBlob(page)) as Record<string, unknown>)
+      .toMatchObject({ stayAwakeAlways: true, stayAwakeWhileRunning: false });
+  });
+
   test("preferences survive a logout", async ({ page, open }) => {
     await stubStatus(page, { authenticated: true, name: "Ioan", id: "42" });
     await page.route("**/glu/api/auth/todoist/logout", (route) =>
@@ -747,7 +907,7 @@ test.describe("settings (ADR 19)", () => {
     await open();
 
     // Establish preferences that logout must not touch.
-    await page.getByRole("button", { name: "Next clock design" }).click();
+    await flipClock(page, 1);
     const before = await readBlob(page);
 
     await openSettings(page);
@@ -845,6 +1005,42 @@ test.describe("task view (ADR 12)", () => {
     await page.reload({ waitUntil: "load" });
     await expect(page.getByTestId("task-card")).toHaveCount(3);
     await expect.poll(async () => (await readBlob(page))?.todoistSource?.id).toBe("p1");
+  });
+
+  /** ADR 12 amendment: below `sm` the popover is a modal that owns the screen. */
+  test("below sm the source picker opens as a near-full-screen modal", async ({ page, open }) => {
+    const viewport = { width: 590, height: 900 };
+    await page.setViewportSize(viewport);
+    await loginAs(page);
+    await stubLists(page);
+    await stubTasks(page, {
+      items: [
+        { id: "1", title: "Loose task", description: "", uiPriority: 3, sectionId: null, order: 0 },
+      ],
+      truncated: false,
+      cap: 200,
+    });
+    await open();
+
+    await page.getByRole("button", { name: "Choose task source" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    // "Most of the screen", measured rather than asserted by eye.
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width / viewport.width).toBeGreaterThan(0.85);
+    expect(box!.height / viewport.height).toBeGreaterThan(0.8);
+
+    // The list is the screen: options are on it, not behind a second dropdown.
+    await expect(page.getByRole("option", { name: "GLU" })).toBeVisible();
+    await page.getByPlaceholder("Choose a project").fill("nothing-matches");
+    await expect(page.getByRole("option")).toHaveCount(0);
+    await page.getByPlaceholder("Choose a project").fill("gl");
+
+    await page.getByRole("option", { name: "GLU" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("task-card")).toHaveCount(1);
   });
 
   test("the refresh button refetches in place — no skeleton flash", async ({
@@ -1179,7 +1375,11 @@ const overlaps = (a: Box, b: Box) =>
 test.describe("focused task time comments (ADR 14)", () => {
   type Page = import("@playwright/test").Page;
 
-  const stubProxy = async (page: Page, posted: { body: unknown }[]) => {
+  const stubProxy = async (
+    page: Page,
+    posted: { body: unknown }[],
+    deleted: string[] = [],
+  ) => {
     await page.route("**/glu/api/auth/todoist/status", (route) =>
       route.fulfill({ json: { authenticated: true, name: "Ioan", id: "42" } }),
     );
@@ -1190,7 +1390,14 @@ test.describe("focused task time comments (ADR 14)", () => {
       route.fulfill({
         json: {
           items: [
-            { id: "t1", title: "Ship ADR 14", description: "", uiPriority: 2, sectionId: null, order: 0 },
+            {
+              id: "t1",
+              title: "Ship ADR 14",
+              description: "Pin it, run the clock, let the comment land",
+              uiPriority: 2,
+              sectionId: null,
+              order: 0,
+            },
             { id: "t2", title: "Other task", description: "", uiPriority: 4, sectionId: null, order: 1 },
           ],
           truncated: false,
@@ -1202,11 +1409,22 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.route("**/glu/api/todoist/task/*/time-total", (route) =>
       route.fulfill({ json: { minutes, counted: 1, ignored: 0, clamped: false } }),
     );
+    let created = 0;
     await page.route("**/glu/api/todoist/comment", async (route) => {
       const body = route.request().postDataJSON();
       posted.push({ body });
       minutes += (body as { minutes: number }).minutes;
-      await route.fulfill({ json: { posted: true } });
+      created += 1;
+      // The id is what the post-then-delete undo window aims at.
+      await route.fulfill({ json: { posted: true, id: `c${created}` } });
+    });
+    // Registered after the POST stub, and narrower: `…/comment` never matches
+    // `…/comment/c1`, so the two routes cannot shadow each other.
+    await page.route("**/glu/api/todoist/comment/*", async (route) => {
+      const id = new URL(route.request().url()).pathname.split("/").at(-1)!;
+      deleted.push(id);
+      minutes -= posted.length ? (posted.at(-1)!.body as { minutes: number }).minutes : 0;
+      await route.fulfill({ json: { deleted: true } });
     });
   };
 
@@ -1226,11 +1444,19 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
 
     await expect(page.getByTestId("focused-task")).toContainText("Ship ADR 14");
+    // The list card's description line survives focusing (ADR 14 amendment, f).
+    await expect(page.getByTestId("focused-description")).toHaveText(
+      "Pin it, run the clock, let the comment land",
+    );
     await expect(page.getByTestId("task-card")).toHaveCount(1);
     await expect(page.getByTestId("task-card")).toContainText("Other task");
 
     await page.reload({ waitUntil: "load" });
     await expect(page.getByTestId("focused-task")).toContainText("Ship ADR 14");
+    // Persisted with the snapshot, so it is there before any fetch returns.
+    await expect(page.getByTestId("focused-description")).toHaveText(
+      "Pin it, run the clock, let the comment land",
+    );
 
     await page.getByRole("button", { name: /Unfocus/ }).click();
     await expect(page.getByTestId("task-card")).toHaveCount(2);
@@ -1255,24 +1481,62 @@ test.describe("focused task time comments (ADR 14)", () => {
     const bar = page.getByTestId("undo-bar");
     await expect(bar).toBeVisible();
     await expect(bar).toContainText("[5m]");
+    await expect(bar).toContainText("comment will be added");
 
     await bar.getByRole("button", { name: "Undo" }).click();
     await expect(bar).toHaveCount(0);
 
-    // Nothing was ever sent: cancelling an unsent post needs no delete verb.
+    // Nothing was ever sent: cancelling inside the 2 s grace still needs no
+    // delete verb — that is what phase one buys.
     await page.clock.fastForward("00:30");
     expect(posted).toEqual([]);
     await expect.poll(async () => (await readBlob(page))?.outbox).toEqual([]);
   });
 
-  test("letting the grace lapse posts exactly one composed comment", async ({
+  test("the comment lands two seconds later, and Undo then deletes it", async ({
     page,
     open,
     seedStorage,
   }) => {
     const posted: { body: unknown }[] = [];
+    const deleted: string[] = [];
     await page.clock.install();
-    await stubProxy(page, posted);
+    await stubProxy(page, posted, deleted);
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:00");
+    await page.getByRole("button", { name: "Stop" }).click();
+
+    const bar = page.getByTestId("undo-bar");
+    await expect(bar).toContainText("comment will be added");
+
+    // Two seconds, not ten: the comment is real by now, and the bar says so
+    // without ever leaving the screen.
+    await page.clock.fastForward("00:03");
+    await expect.poll(() => posted.length).toBe(1);
+    await expect(bar).toBeVisible();
+    await expect(bar).toContainText("comment added");
+    await expect(bar).toContainText("[5m]");
+
+    // Same bar, second mechanic: a real DELETE against the comment just made.
+    await bar.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => deleted).toEqual(["c1"]);
+    await expect(bar).toHaveCount(0);
+    expect(posted).toHaveLength(1);
+  });
+
+  test("letting the whole window lapse posts exactly one composed comment", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    const deleted: string[] = [];
+    await page.clock.install();
+    await stubProxy(page, posted, deleted);
     await seedStorage(withSource());
     await open();
 
@@ -1283,11 +1547,82 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(1);
+    // The undo window lapsed unused; nothing was deleted behind our back.
+    expect(deleted).toEqual([]);
+    await expect(page.getByTestId("undo-bar")).toHaveCount(0);
     expect(posted[0].body).toEqual({ taskId: "t1", minutes: 7 });
 
     // The outbox drains, and the badge refreshes off the post.
     await expect.poll(async () => (await readBlob(page))?.outbox).toEqual([]);
     await expect(page.getByTestId("focused-total")).toContainText("[7m]");
+  });
+
+  /**
+   * ADR 27. The wire carries *keys*, never the sentence — the whole point of
+   * ADR 14's composing server survives this feature, and these two tests are
+   * where that is visible end to end.
+   */
+  test("the comment reports the environment the run happened in", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    await page.clock.install();
+    await stubProxy(page, posted);
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByText("Music", { exact: true }).click();
+    await page.getByText("Headphones", { exact: true }).click();
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("06:00");
+    await page.getByRole("button", { name: "Stop" }).click();
+    await page.clock.fastForward("00:20");
+
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0].body).toEqual({
+      taskId: "t1",
+      minutes: 6,
+      environment: ["music", "headphones"],
+    });
+  });
+
+  test("turning the setting off puts ADR 14's plain sentence back", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    await page.clock.install();
+    await stubProxy(page, posted);
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByText("Music", { exact: true }).click();
+
+    // Through the real surface: drawer → Settings → the switch.
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Settings").click();
+    const settings = page.getByRole("dialog").last();
+    // The preview is the artifact the user is deciding about.
+    await expect(settings.getByTestId("comment-preview-on-text")).toContainText("with music");
+    await settings.getByRole("switch", { name: "Say how you worked" }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    // The drawer is still open behind the modal, and it overlays the list.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("06:00");
+    await page.getByRole("button", { name: "Stop" }).click();
+    await page.clock.fastForward("00:20");
+
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
   });
 
   test("a run under the threshold posts nothing at all", async ({
@@ -1309,6 +1644,123 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     await expect(page.getByTestId("undo-bar")).toHaveCount(0);
     expect(posted).toEqual([]);
+  });
+
+  /**
+   * ADR 14 amendment (2026-07-25g). A run that ended while the app was closed
+   * kept its session and silently lost its comment: `rehydrate()` finishes the
+   * run before the shell — and this listener with it — is mounted, so the run
+   * end was emitted into an empty room. The buffer in the run-end bus is what
+   * this asserts, from the outside.
+   */
+  test("a run that ended while the app was closed still posts its comment", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    await page.clock.install({ time: new Date("2026-07-25T09:00:00Z") });
+    await stubProxy(page, posted);
+    await seedStorage(
+      seed({
+        todoistSource: { type: "project", id: "p1", name: "GLU" },
+        focusedTask: { id: "t1", title: "Ship ADR 14", priority: 2 },
+        // Five minutes of attention, ended two minutes before this load.
+        status: "running",
+        endAt: new Date("2026-07-25T08:58:00Z").getTime(),
+        remaining: 0,
+        total: 5 * 60_000,
+        runId: "run-away-1",
+        runningSince: new Date("2026-07-25T08:53:00Z").getTime(),
+      }),
+    );
+
+    await open();
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+    // Past the grace, so the outbox drains rather than sitting in it.
+    await page.clock.fastForward("00:20");
+
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 5 });
+    // The session was never the broken half — assert it stayed intact.
+    await expect.poll(async () => (await readBlob(page))?.day?.sessions?.length).toBe(1);
+  });
+
+  /**
+   * ADR 28 amendment: the minimum is inclusive. This is the owner's repro —
+   * 5 minutes trimmed to one, run to 0:00 — and the smallest run GLU can make:
+   * exactly 60 000 ms of attention against a 1-minute minimum. (The repro was
+   * −2 twice until the row became ±1 on 2026-07-25; it is −1 four times now.)
+   */
+  test("a 1-minute run posts, because the minimum means at least", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    await page.clock.install();
+    await stubProxy(page, posted);
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    const minusOne = page.getByRole("button", { name: /Subtract 1 minute/ });
+    for (let i = 0; i < 4; i++) await minusOne.click();
+    await expect(page.getByTestId("clock-slot")).toContainText("01:00");
+
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("01:00");
+    await page.clock.fastForward("00:20");
+
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 1 });
+  });
+
+  /** ADR 28: the threshold is a setting, and this is it moving. */
+  test("raising the minimum in Settings silences a run that used to post", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const posted: { body: unknown }[] = [];
+    await page.clock.install();
+    await stubProxy(page, posted);
+    await seedStorage(withSource());
+    await open();
+
+    // Through the real surface: drawer → Settings → the ladder.
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Settings").click();
+    const settings = page.getByRole("dialog").last();
+    const ladder = settings.getByRole("radiogroup", { name: "Minimum time to log" });
+    // `exact` throughout: "5 min" is a substring of "15 min".
+    await expect(ladder.getByRole("radio", { name: "1 min", exact: true })).toBeChecked();
+    // The tap lands on the rung's label, which is what a finger hits — the
+    // radio itself is the transparent input underneath it.
+    await ladder.getByText("5 min", { exact: true }).click();
+    await expect(ladder.getByRole("radio", { name: "5 min", exact: true })).toBeChecked();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 14”/ }).click();
+
+    // Four minutes: a comment under ADR 14's minute, nothing under this one.
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("04:00");
+    await page.getByRole("button", { name: "Stop" }).click();
+    await page.clock.fastForward("00:20");
+    await expect(page.getByTestId("undo-bar")).toHaveCount(0);
+    expect(posted).toEqual([]);
+
+    // Six minutes clears it, and posts exactly what it always did.
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("06:00");
+    await page.getByRole("button", { name: "Stop" }).click();
+    await page.clock.fastForward("00:20");
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
   });
 
   test("finishing at 0:00 and `n` restart both post; 61 s posts [1m]", async ({
@@ -1399,7 +1851,8 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     await page.reload({ waitUntil: "load" });
     // The undo opportunity lapsed with the navigation — tracked time must not
-    // depend on a ten-second race.
+    // depend on a race, and undo follows the gesture, not the queue: a comment
+    // drained after a reload posts without offering a bar nobody asked for.
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(1);
     expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
@@ -1711,9 +2164,18 @@ test.describe("task actions (ADR 20)", () => {
 /* ADR 21 — final-countdown takeover                                          */
 /* ------------------------------------------------------------------------- */
 
+const takeoverOverlay = (page: import("@playwright/test").Page) =>
+  page.getByTestId("takeover-overlay");
+
 test.describe("final-countdown takeover (ADR 21)", () => {
-  const overlay = (page: import("@playwright/test").Page) =>
-    page.getByTestId("takeover-overlay");
+  const overlay = takeoverOverlay;
+
+  // ADR 21 amendment (2026-07-25): the takeover is a tablet-layout statement.
+  // Below `sm` the clock already owns the whole first viewport (ADR 08), so
+  // there is nothing beside it to flood — the contracts below are `sm`-and-up.
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name.includes("half-tablet"), "no takeover below `sm`");
+  });
 
   test("engages at the 60 s mark and covers everything but the clock", async ({
     page,
@@ -1740,7 +2202,10 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     expect(layers.clockZ).toBeGreaterThan(layers.overlayZ);
   });
 
-  test("a tap where a control would be peeks instead of pressing it", async ({ page, open }) => {
+  test("a tap where a control would be dismisses it instead of pressing it", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
 
@@ -1758,9 +2223,14 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
     await expect(overlay(page)).toHaveCount(0);
 
-    // During the peek the controls really work.
+    // The chrome the tap asked for stays: the run keeps ticking under the
+    // threshold and nothing covers the page again (ADR 21 amendment).
+    await page.clock.fastForward("00:20");
+    await expect(overlay(page)).toHaveCount(0);
+
+    // …and the controls really work.
     await page.getByRole("button", { name: /Add 5 minutes/ }).click();
-    await expect(page.getByTestId("clock-slot")).toContainText("05:5");
+    await expect(page.getByTestId("clock-slot")).toContainText("05:3");
     await expect(overlay(page)).toHaveCount(0);
   });
 
@@ -1804,8 +2274,9 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(page.getByTestId("clock-slot")).toContainText("00:00");
     await expect(overlay(page)).toBeVisible();
 
-    // …and any tap dissolves it, permanently.
-    await overlay(page).click({ position: { x: 20, y: 20 } });
+    // …and any tap dissolves it, permanently. The tap goes to the clock: it is
+    // the only pressable surface below `sm`, and it works at every width.
+    await tapClock(page);
     await expect(overlay(page)).toHaveCount(0);
     await page.clock.fastForward("00:10");
     await expect(overlay(page)).toHaveCount(0);
@@ -1870,6 +2341,58 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(bar).toHaveCount(0);
   });
 
+  /**
+   * The clock rides *above* the overlay (that is what makes "everything except
+   * the clock" literal), so the overlay never sees a tap that lands on it: the
+   * clock has to honour that tap itself or the hero surface is the one place
+   * the takeover ignores.
+   */
+  test("a tap on the clock itself dissolves the 00:00 takeover", async ({ page, open }) => {
+    await page.clock.install();
+    await open();
+
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+    await expect(overlay(page)).toBeVisible();
+
+    await tapClock(page);
+
+    await expect(overlay(page)).toHaveCount(0);
+    // The chrome the takeover was hiding is pressable again (ADR 10).
+    await page.getByRole("button", { name: "Open header" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  /**
+   * ADR 21 amendment (2026-07-25): the 00:00 cover persists *through* a
+   * crossing, and a page load has none behind it — a reload restores the app,
+   * not the endgame screen.
+   */
+  test("a reload at 00:00 comes back to the whole page", async ({ page, open, seedStorage }) => {
+    await page.clock.install({ time: new Date("2026-07-24T09:00:00Z") });
+    await seedStorage(
+      seed({
+        status: "finished",
+        endAt: null,
+        remaining: 0,
+        total: 20 * MINUTE,
+        runId: "finished-run",
+        runningSince: null,
+      }),
+    );
+
+    await open();
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+    await expect(overlay(page)).toHaveCount(0);
+
+    // Header and transport are both there, no dismissal needed.
+    await expect(page.getByRole("button", { name: "Open header" })).toBeVisible();
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
+  });
+
   test("reduced motion crossfades instead of sweeping", async ({ page, open }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.clock.install();
@@ -1883,5 +2406,319 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(overlay(page)).toHaveAttribute("data-phase", "on");
     const transform = await overlay(page).evaluate((el) => getComputedStyle(el).transform);
     expect(["none", "matrix(1, 0, 0, 1, 0, 0)"]).toContain(transform);
+  });
+});
+
+/**
+ * ADR 21 amendment (2026-07-25): below `sm` there is no takeover at all. ADR 08
+ * already gives the clock the entire first viewport there, so an overlay would
+ * cover a screen that is nothing but clock — and take the page's scroll with
+ * it. The half-tablet projects own this contract.
+ */
+test.describe("no takeover below `sm` (ADR 21)", () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(!testInfo.project.name.includes("half-tablet"), "half-tablet contract");
+  });
+
+  test("the final minute and 00:00 both leave the page whole", async ({ page, open }) => {
+    await page.clock.install();
+    await open();
+
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+
+    // Across the crossing, and well past it: nothing ever covers the page.
+    await page.clock.fastForward("04:05");
+    await expect(takeoverOverlay(page)).toHaveCount(0);
+    await page.clock.fastForward("00:20");
+    await expect(takeoverOverlay(page)).toHaveCount(0);
+
+    // Not at 00:00 either, and the chrome below the fold is still scrollable to.
+    await page.clock.fastForward("01:00");
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+    await expect(takeoverOverlay(page)).toHaveCount(0);
+
+    await page.getByText("Music", { exact: true }).click();
+    await expect.poll(async () => (await readBlob(page))?.environment).toMatchObject({
+      music: true,
+    });
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* ADR 26 — Privacy Policy and Terms of Service                               */
+/* ------------------------------------------------------------------------- */
+
+test.describe("legal pages (ADR 26)", () => {
+  /**
+   * The `open` fixture waits for `clock-slot`, which these routes deliberately
+   * do not render — they are not the app shell. Relative path, never a leading
+   * slash: that escapes the basePath (ADR 09's footgun).
+   */
+  const openDoc = async (page: import("@playwright/test").Page, path: "privacy" | "terms") => {
+    await page.goto(path, { waitUntil: "load" });
+  };
+
+  test("the drawer links to both documents, in a new tab, under the basePath", async ({
+    page,
+    open,
+  }) => {
+    await open();
+    await page.getByRole("button", { name: "Open header" }).click();
+
+    const legal = page.getByRole("dialog").getByRole("navigation", { name: "Legal" });
+    for (const [name, path] of [
+      ["Privacy Policy", "/glu/privacy"],
+      ["Terms of Service", "/glu/terms"],
+    ] as const) {
+      const link = legal.getByRole("link", { name });
+      // The whole point of `next/link`: a hand-written href would resolve to
+      // ioan.dev/privacy — the sibling site's policy, which looks right.
+      await expect(link).toHaveAttribute("href", path);
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      const box = (await link.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("both routes render their document and cross-link to each other", async ({ page }) => {
+    await openDoc(page, "privacy");
+    await expect(page.getByRole("heading", { level: 1, name: "Privacy Policy" })).toBeVisible();
+    await expect(page.getByText("Last updated:")).toBeVisible();
+    await expect(page).toHaveTitle(/Privacy Policy/);
+    // The claims the ADR holds the copy to.
+    await expect(page.getByRole("heading", { name: /stored on your device/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Todoist/ })).toBeVisible();
+
+    await page
+      .getByRole("navigation", { name: "Legal" })
+      .getByRole("link", { name: "Terms of Service" })
+      .click();
+
+    await expect(page.getByRole("heading", { level: 1, name: "Terms of Service" })).toBeVisible();
+    await expect(page).toHaveURL(/\/glu\/terms$/);
+    await expect(page).toHaveTitle(/Terms of Service/);
+
+    await page
+      .getByRole("navigation", { name: "Legal" })
+      .getByRole("link", { name: "Privacy Policy" })
+      .click();
+    await expect(page).toHaveURL(/\/glu\/privacy$/);
+  });
+
+  test("the documents scroll where the app deliberately does not", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await openDoc(page, "terms");
+
+    // The inverse of the ADR 02 layout contract: the shell's `overflow: hidden`
+    // must not have leaked out of `.shell` and onto the document.
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
+    );
+    expect(scrollable).toBe(true);
+  });
+
+  test("back to GLU returns to the app under the basePath", async ({ page, seedStorage }) => {
+    // The one test in this block that ends up *in the app*, so it is the one
+    // that has to declare itself a returning visitor — `/glu` gates on that
+    // now (ADR 31), and these routes bypass the `open` fixture that otherwise
+    // says so.
+    await seedStorage(seed());
+    await openDoc(page, "privacy");
+    await page.getByRole("link", { name: /Back to GLU/ }).click();
+    await expect(page.getByTestId("clock-slot")).toBeVisible();
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* ADR 29 — documentation: one page, opened as a modal from the drawer        */
+/* ------------------------------------------------------------------------- */
+
+test.describe("documentation (ADR 29)", () => {
+  /**
+   * Like the ADR 26 routes, `/glu/docs` is not the app shell, so the `open`
+   * fixture's `clock-slot` wait does not apply. Relative path, never a leading
+   * slash — that escapes the basePath (ADR 09's footgun).
+   */
+  const openDocsPage = (page: import("@playwright/test").Page) =>
+    page.goto("docs", { waitUntil: "load" });
+
+  const openDocsModal = async (page: import("@playwright/test").Page) => {
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Docs").click();
+    await expect(page.getByTestId("docs-modal-body")).toBeVisible();
+  };
+
+  /** The whole point of the ADR: the drawer opens a modal, it does not navigate. */
+  test("the Docs row opens a modal without leaving the app", async ({ page, open }) => {
+    await open();
+    const before = page.url();
+
+    await openDocsModal(page);
+
+    expect(page.url()).toBe(before);
+    // The app is still mounted behind the overlay — a navigation would have
+    // taken the clock with it, along with the wake lock and the primed audio
+    // context that never survive a page teardown.
+    await expect(page.getByTestId("clock-slot")).toBeAttached();
+    await expect(page.getByRole("heading", { name: "The timer" })).toBeVisible();
+
+    // One Escape closes the whole overlay stack — the modal *and* the drawer
+    // behind it. Mantine's overlays both listen on the window, so the keydown
+    // reaches both; verified identical for the Settings modal, and matching its
+    // twin beats a bespoke escape hatch for one row (ADR 29 deviation).
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("docs-modal-body")).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // What matters: the app was never left, and is still there to go back to.
+    await expect(page.getByTestId("clock-slot")).toBeVisible();
+    expect(page.url()).toBe(before);
+  });
+
+  test("a running timer keeps counting behind the docs modal", async ({ page, open }) => {
+    await page.clock.install();
+    await open();
+    await page.getByRole("button", { name: "Start" }).click();
+
+    await openDocsModal(page);
+
+    /**
+     * Read the countdown rather than assert a fixed "19:00": the installed
+     * clock still advances in real time, and opening this modal costs a chunk
+     * fetch plus a long document's worth of DOM — enough drift to make an exact
+     * readout a flake, not a failure.
+     */
+    const remainingSeconds = async () => {
+      const text = (await page.getByTestId("clock-slot").textContent()) ?? "";
+      const match = text.match(/(\d{1,2}):(\d{2})/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : NaN;
+    };
+
+    const before = await remainingSeconds();
+    await page.clock.fastForward("01:00");
+    await expect.poll(remainingSeconds).toBeLessThanOrEqual(before - 60);
+  });
+
+  /**
+   * The modal header is `position: sticky` above the longest scroll in the app,
+   * which makes its background structural rather than decorative: while it was
+   * `transparent`, the prose scrolled straight through "How GLU works" (owner
+   * report 2026-07-25). Same header class serves the drawer and the Settings
+   * modal, so this covers all three.
+   */
+  test("the sticky modal header keeps the scrolling prose behind it", async ({ page, open }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await open();
+    await openDocsModal(page);
+
+    const header = await page.evaluate(() => {
+      const body = document.querySelector('[data-testid="docs-modal-body"]')!;
+      // The modal content is the scroller; the sticky header is inside it.
+      const scroller = body.closest('[class*="Modal-content"]') as HTMLElement;
+      // The header's own text is the title too, so take the *innermost* match —
+      // preorder puts the header first and the title element last.
+      const title = [...scroller.querySelectorAll<HTMLElement>("*")]
+        .filter((el) => el.textContent?.trim() === "How GLU works")
+        .at(-1)!;
+      const titleParent = title.parentElement!;
+      scroller.scrollTop = 400;
+      const style = getComputedStyle(titleParent);
+      return {
+        scrolled: scroller.scrollTop,
+        position: style.position,
+        background: style.backgroundColor,
+        top: titleParent.getBoundingClientRect().top,
+        scrollerTop: scroller.getBoundingClientRect().top,
+      };
+    });
+
+    expect(header.scrolled).toBeGreaterThan(0);
+    expect(header.position).toBe("sticky");
+    // Opaque, whatever the chrome direction: a computed colour serializes as
+    // `rgba(…)` exactly when its alpha is below 1, and `transparent` as
+    // `rgba(0, 0, 0, 0)` — the defect this test exists for.
+    expect(header.background).toMatch(/^rgb\(/);
+    // Still pinned to the top of the scroller after the scroll.
+    expect(Math.abs(header.top - header.scrollerTop)).toBeLessThan(2);
+  });
+
+  test("the closing navigation offers both documents and the shareable page", async ({
+    page,
+    open,
+  }) => {
+    await open();
+    await openDocsModal(page);
+
+    const nav = page.getByRole("navigation", { name: "Docs navigation" });
+    for (const [name, href] of [
+      ["Privacy Policy", "/glu/privacy"],
+      ["Terms of Service", "/glu/terms"],
+      ["Open as a page", "/glu/docs"],
+    ] as const) {
+      const link = nav.getByRole("link", { name });
+      // basePath applied — a hand-written `/privacy` would resolve to the
+      // sibling site's policy (ADR 26's failure mode, unchanged here).
+      await expect(link).toHaveAttribute("href", href);
+      // New tab: the app behind this overlay must survive the click.
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      const box = (await link.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("the route renders the same document and scrolls", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await openDocsPage(page);
+
+    await expect(page.getByRole("heading", { level: 1, name: "How GLU works" })).toBeVisible();
+    await expect(page).toHaveTitle(/How GLU works/);
+    await expect(page.getByText("Last updated:")).toBeVisible();
+
+    // A sample of the claim list — a section vanishing is a defect, not a tweak.
+    for (const heading of [
+      "The timer",
+      "Keyboard shortcuts",
+      "Environment toggles",
+      "Todoist (optional)",
+      "Limits, honestly",
+    ]) {
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    }
+
+    // The inverse of the ADR 02 layout contract, as for the legal routes.
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
+    );
+    expect(scrollable).toBe(true);
+  });
+
+  test("the three documents cross-link both ways", async ({ page }) => {
+    await openDocsPage(page);
+
+    await page
+      .getByRole("navigation", { name: "Legal" })
+      .getByRole("link", { name: "Privacy Policy" })
+      .click();
+    await expect(page).toHaveURL(/\/glu\/privacy$/);
+
+    // ADR 29 gave the legal footers a way back — three documents that only
+    // linked one way would be a chain, not a set.
+    await page
+      .getByRole("navigation", { name: "Legal" })
+      .getByRole("link", { name: "Documentation" })
+      .click();
+    await expect(page).toHaveURL(/\/glu\/docs$/);
+    await expect(page.getByRole("heading", { level: 1, name: "How GLU works" })).toBeVisible();
+  });
+
+  test("back to GLU returns to the app under the basePath", async ({ page, seedStorage }) => {
+    // As in the ADR 26 block: this one lands in the app, so it seeds a
+    // returning visitor past ADR 31's gate.
+    await seedStorage(seed());
+    await openDocsPage(page);
+    await page.getByRole("link", { name: /Back to GLU/ }).click();
+    await expect(page.getByTestId("clock-slot")).toBeVisible();
   });
 });

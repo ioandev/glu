@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { useGluStore } from "@/store/gluStore";
 import type { TimerStatus } from "@/store/types";
-import { useWakeLock, WAKE_LOCK_GRACE_MS } from "./useWakeLock";
+import {
+  DEFAULT_WAKE_LOCK_PREFERENCES,
+  useWakeLock,
+  WAKE_LOCK_GRACE_MS,
+  type WakeLockPreferences,
+} from "./useWakeLock";
 
 type Listener = () => void;
 
@@ -49,8 +54,14 @@ function removeWakeLock() {
   Reflect.deleteProperty(navigator as unknown as Record<string, unknown>, "wakeLock");
 }
 
-function Harness({ status }: { status: TimerStatus }) {
-  useWakeLock(status);
+function Harness({
+  status,
+  prefs = DEFAULT_WAKE_LOCK_PREFERENCES,
+}: {
+  status: TimerStatus;
+  prefs?: WakeLockPreferences;
+}) {
+  useWakeLock(status, prefs);
   return null;
 }
 
@@ -59,15 +70,25 @@ async function flush() {
   await act(async () => {});
 }
 
-/** Renders the hook and lets the status change like the store would. */
-function renderHook(initial: TimerStatus) {
-  const view = render(<Harness status={initial} />);
+/** Renders the hook and lets the status (or a preference) change like the store would. */
+function renderHook(initial: TimerStatus, initialPrefs: WakeLockPreferences = DEFAULT_WAKE_LOCK_PREFERENCES) {
+  let status = initial;
+  let prefs = initialPrefs;
+  const view = render(<Harness status={status} prefs={prefs} />);
+  const rerender = async () => {
+    await act(async () => {
+      view.rerender(<Harness status={status} prefs={prefs} />);
+    });
+  };
   return {
     ...view,
-    async setStatus(status: TimerStatus) {
-      await act(async () => {
-        view.rerender(<Harness status={status} />);
-      });
+    async setStatus(next: TimerStatus) {
+      status = next;
+      await rerender();
+    },
+    async setPrefs(next: Partial<WakeLockPreferences>) {
+      prefs = { ...prefs, ...next };
+      await rerender();
     },
   };
 }
@@ -159,6 +180,90 @@ describe("wake lock hold policy (ADR 17)", () => {
     await act(async () => {
       vi.advanceTimersByTime(WAKE_LOCK_GRACE_MS + 1000);
     });
+    expect(sentinels[0].released).toBe(false);
+  });
+});
+
+describe("the two preferences (ADR 17 amendment)", () => {
+  const ALWAYS: WakeLockPreferences = { always: true, whileRunning: true };
+  const NEITHER: WakeLockPreferences = { always: false, whileRunning: false };
+
+  it("'stay awake on the website' holds the lock with no timer at all", async () => {
+    renderHook("idle", ALWAYS);
+    await flush();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(sentinels[0].released).toBe(false);
+  });
+
+  it("'stay awake on the website' survives every timer state, grace included", async () => {
+    const view = renderHook("idle", ALWAYS);
+    await flush();
+    for (const status of ["running", "paused", "finished", "idle"] as TimerStatus[]) {
+      await view.setStatus(status);
+      await act(async () => {
+        vi.advanceTimersByTime(WAKE_LOCK_GRACE_MS + 1000);
+      });
+      expect(sentinels[0].released).toBe(false);
+    }
+    // One sentinel throughout: the preference never re-requests on a status change.
+    expect(sentinels).toHaveLength(1);
+  });
+
+  it("opting out of the run policy means a run never acquires", async () => {
+    const view = renderHook("idle", NEITHER);
+    await view.setStatus("running");
+    await view.setStatus("paused");
+    await view.setStatus("finished");
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("opting out mid-run releases the lock immediately", async () => {
+    const view = renderHook("running");
+    await flush();
+    expect(sentinels[0].released).toBe(false);
+
+    await view.setPrefs({ whileRunning: false });
+    expect(sentinels[0].released).toBe(true);
+  });
+
+  it("flipping 'on the website' on and off in idle acquires and releases", async () => {
+    const view = renderHook("idle");
+    await flush();
+    expect(request).not.toHaveBeenCalled();
+
+    await view.setPrefs({ always: true });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(sentinels[0].released).toBe(false);
+
+    await view.setPrefs({ always: false });
+    expect(sentinels[0].released).toBe(true);
+  });
+
+  it("the grace deadline is preference-independent — opting back in mid-grace resumes it", async () => {
+    const view = renderHook("running", NEITHER);
+    await view.setStatus("paused");
+    expect(request).not.toHaveBeenCalled();
+
+    // Two minutes into a grace that was never held: opting in picks up what's left.
+    await act(async () => {
+      vi.advanceTimersByTime(2 * 60_000);
+    });
+    await view.setPrefs({ whileRunning: true });
+    expect(request).toHaveBeenCalledTimes(1);
+
+    // …and the deadline is still the pause's, not a fresh five minutes.
+    await act(async () => {
+      vi.advanceTimersByTime(3 * 60_000 + 1000);
+    });
+    expect(sentinels[0].released).toBe(true);
+  });
+
+  it("'on the website' outranks an opted-out run policy", async () => {
+    const view = renderHook("running", { always: true, whileRunning: false });
+    await flush();
+    expect(sentinels[0].released).toBe(false);
+
+    await view.setStatus("idle");
     expect(sentinels[0].released).toBe(false);
   });
 });

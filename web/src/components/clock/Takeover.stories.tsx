@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import { MINUTE } from "@/lib/time";
+import { useGluStore } from "@/store/gluStore";
 import { withStoreState } from "@/stories/storeDecorator";
 import { AppShell } from "@/components/app/AppShell";
 
@@ -14,6 +15,15 @@ const finalMinute = (patch: Record<string, unknown> = {}) => ({
   runningSince: Date.now() - 19 * MINUTE,
   ...patch,
 });
+
+/**
+ * Ends the run the way the tick loop does — a play function drives the store
+ * rather than sleeping out the real 40 seconds (ADR 03).
+ */
+const runToZero = async (canvas: ReturnType<typeof within>) => {
+  useGluStore.getState().finish();
+  await waitFor(() => expect(canvas.getByTestId("clock-slot")).toHaveTextContent("00:00"));
+};
 
 const meta = {
   title: "Clocks/Takeover",
@@ -72,21 +82,86 @@ export const BlendModeClocksElevated: Story = {
   },
 };
 
-/** Tapping the overlay peeks: the chrome comes back, usable. */
-export const Peeking: Story = {
+/**
+ * Tapping the overlay dissolves it: the chrome comes back, usable, and stays
+ * (ADR 21 amendment 2026-07-25 — the tap is a decision about the run, not a
+ * five-second peek).
+ */
+export const DismissedByATap: Story = {
   decorators: [withStoreState(finalMinute())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const overlay = await canvas.findByTestId("takeover-overlay");
     await userEvent.click(overlay);
     await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
-    // The controls the peek exists for.
+    // The controls the dismissal exists for.
     await expect(canvas.getByRole("button", { name: /Add 5 minutes/ })).toBeVisible();
   },
 };
 
 /** At 0:00 the takeover *is* the distraction-free display. */
 export const FinishedTakeover: Story = {
+  decorators: [withStoreState(finalMinute())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByTestId("takeover-overlay")).toBeVisible();
+
+    // The run ends under a takeover that is already up: that cover is the one
+    // 00:00 carries through (ADR 21).
+    await runToZero(canvas);
+    await expect(canvas.getByTestId("takeover-overlay")).toBeVisible();
+
+    // A tap dissolves it permanently — no re-engage, the session is over.
+    await userEvent.click(canvas.getByTestId("takeover-overlay"));
+    await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
+  },
+};
+
+/**
+ * The clock rides *above* the overlay, so it is the one surface a tap can land
+ * on without the overlay seeing it — it has to honour the tap itself (ADR 21).
+ */
+export const TappingTheClockDissolvesIt: Story = {
+  decorators: [withStoreState(finalMinute())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByTestId("takeover-overlay")).toBeVisible();
+    await runToZero(canvas);
+
+    await userEvent.click(canvas.getByTestId("clock-slot"));
+    await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
+    // …and the header drawer's button is reachable again (ADR 10).
+    await expect(canvas.getByRole("button", { name: /Open header/i })).toBeVisible();
+  },
+};
+
+/**
+ * ADR 21 amendment (2026-07-25): below `sm` there is no takeover at all. ADR 08
+ * already hands the clock the entire first viewport there, so the chrome the
+ * overlay would hide is below the fold — covering the screen hides nothing and
+ * takes the scroll with it.
+ */
+export const NoTakeoverBelowSm: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  decorators: [withStoreState(finalMinute())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId("clock-slot")).toBeVisible();
+    await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
+
+    // Nor at 00:00 — and everything stacked below the clock stays reachable.
+    await runToZero(canvas);
+    await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
+    await expect(canvas.getByRole("button", { name: /Open header/i })).toBeVisible();
+  },
+};
+
+/**
+ * ADR 21 amendment (2026-07-25): a reload at 00:00 restores the app, not the
+ * endgame screen — the 00:00 cover persists through a crossing, and a page load
+ * has no crossing behind it.
+ */
+export const FinishedOnReload: Story = {
   decorators: [
     withStoreState({
       status: "finished",
@@ -97,12 +172,9 @@ export const FinishedTakeover: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByTestId("takeover-overlay")).toBeVisible();
     await expect(canvas.getByTestId("clock-slot")).toHaveTextContent("00:00");
-
-    // A tap dissolves it permanently — no re-engage, the session is over.
-    await userEvent.click(canvas.getByTestId("takeover-overlay"));
     await expect(canvas.queryByTestId("takeover-overlay")).toBeNull();
+    await expect(canvas.getByRole("button", { name: /Open header/i })).toBeVisible();
   },
 };
 

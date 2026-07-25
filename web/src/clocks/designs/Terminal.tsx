@@ -29,14 +29,14 @@ export const terminalTheme: ClockTheme = {
 const BAR_WIDTH = 18;
 
 export function Terminal({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   const filled = Math.round(p.elapsedFraction * BAR_WIDTH);
   const bar = `[${"\u2588".repeat(filled)}${"\u2591".repeat(BAR_WIDTH - filled)}] ${Math.round(
     p.elapsedFraction * 100,

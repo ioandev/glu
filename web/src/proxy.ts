@@ -55,6 +55,18 @@ const HEALTH = "/healthz";
 
 const limiter = createRateLimiter({ ...PAGE_LIMIT, label: "page" });
 
+/**
+ * `next dev` compiles React and the HMR client with `eval()` — that is how the
+ * dev build reconstructs callstacks across environments, and React says so in
+ * the console when the policy forbids it. Production never evaluates a string,
+ * so the relaxation is scoped to the dev server and cannot reach an image:
+ * `NODE_ENV` is `production` in every built artefact.
+ *
+ * This is the one loosening the CSP is allowed. `'unsafe-inline'` stays out in
+ * both modes — the nonce exists precisely so it never has to come back.
+ */
+const DEV_SCRIPT_SRC = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (SKIP.test(pathname)) return NextResponse.next();
@@ -70,7 +82,7 @@ export function proxy(request: NextRequest) {
     "default-src 'self'",
     // 'strict-dynamic' lets the nonced bootstrap load Next's chunks without
     // enumerating them; browsers that don't support it fall back to 'self'.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${DEV_SCRIPT_SRC}`,
     // Mantine writes CSS-variable style attributes at runtime; there is no
     // nonce mechanism for those (ADR 01's styling model).
     "style-src 'self' 'unsafe-inline'",

@@ -13,6 +13,48 @@
   skeletons, since that content is genuinely different. Same fetch path, same
   no-polling rule.
 
+- Amended: 2026-07-25 — **below `sm` the source picker is a modal, not a
+  popover.** The one popup this ADR specified was written for the tablet, where
+  a 280 px dropdown sits beside the list it feeds; on a half-tablet the same
+  dropdown covers a third of the screen and hides its own options behind a
+  second 220 px `Select` dropdown — a list inside a list inside a popover, on
+  the target device that has the least room for it. The picker now uses ADR
+  13's responsive-furniture split (`useMediaQuery("(max-width: 48em)")`): the
+  popover at/above `sm`, and below it a centred modal ~90 % wide × 88 dvh tall
+  holding the same segmented control over a **search field and an always-open
+  listbox** that takes every remaining pixel and scrolls internally. Options
+  are 48 px rows. Same fetch hook, same persisted `todoistSource`, same
+  segmented control, no new proxy surface.
+- Deviation (2026-07-25, amendment): the mobile list is Mantine's `Combobox`
+  primitives rather than `Select` — a `Select` renders its options into a small
+  overlay no matter how much room the modal has, which is the exact thing the
+  modal exists to fix. `Combobox` gives the same `listbox`/`option` roles and
+  keyboard walk with the list rendered inline.
+- Deviation (2026-07-25, amendment): the source list is now keyed by the type
+  it was fetched for, so switching Project → Label no longer shows the previous
+  type's rows under the new heading while the fetch is in flight. Invisible in
+  a 280 px dropdown; a full screen of wrong rows in the modal.
+
+- Amended: 2026-07-25 — **filters were broken end to end, and both halves were
+  upstream facts this ADR recorded wrongly.** (1) `GET /api/v1/filters` does
+  not exist; it 404s against the live API. Saved filters live only in the Sync
+  API, so `/filters` now reads them with a `filters`-only sync
+  (`POST /sync`, `resource_types: ["filters"]`), drops `is_deleted`, and sorts
+  by `item_order`. `/sync` is *used*, never *exposed* — the allowlist is
+  unchanged and still refuses `/glu/api/todoist/sync`. (2) A filter query may
+  hold **several views separated by top-level commas**; Todoist's UI unions
+  them, but `/tasks/filter` reads the comma as AND — `p1, p2` returns 0 tasks
+  where `p1 | p2` returns 15. The proxy now splits a filter query on its
+  top-level commas (parentheses and quotes excluded), fetches each view (four
+  at a time, at most `FILTER_VIEW_CAP` = 20) and unions them **in view order**,
+  first occurrence winning, still capped at 200 with `truncated` set when
+  anything is left out. Neither bug could surface in tests, because every test
+  mocks the upstream — this is what the HUMAN-TODO real-account check existed
+  to catch.
+- Deviation (2026-07-25, amendment): a multi-view filter renders as **one flat
+  union**, not as Todoist's stacked per-view lists. View headers are a list
+  feature this ADR gave only to project sections; a task matching two views
+  appears once. Revisit if the flattening ever loses meaning.
 - Deviation (2026-07-24, implementation): the priority circle is a
   `role="img"` span until ADR 20 makes it a control — an `aria-label` on a
   role-less div is an axe violation, and inventing a fake button for a
@@ -53,8 +95,9 @@ etc.). **What happens on tap is explicitly the next ADR (13, penciled)** —
 cards here look tappable but do nothing.
 
 Endpoint surface verified against developer.todoist.com (unified API v1) on
-2026-07-23: `GET /api/v1/projects`, `/sections`, `/labels`, `/filters`, tasks
-by filter query, cursor pagination. One domain fact worth stating in bold
+2026-07-23: `GET /api/v1/projects`, `/sections`, `/labels`, ~~`/filters`~~,
+tasks by filter query, cursor pagination. *(`/filters` was wrong — it 404s;
+see the 2026-07-25 amendment. The sweep read docs, not responses.)* One domain fact worth stating in bold
 because it ships bugs every year: **Todoist's API priority is inverted from
 its UI — API `priority: 4` is the UI's P1 (red); API `1` is P4 (none).**
 
@@ -207,7 +250,7 @@ gets skipped and then bites.
 
 ## Acceptance criteria
 
-- [x] Logged in, no source: the Todoist area shows the hint; the tools icon opens the popover with Filter/Label/Project tabs, each listing real data (or fixtures in tests) in a searchable select. *(fixtures in tests; real data is a HUMAN-TODO check)*
+- [x] Logged in, no source: the Todoist area shows the hint; the tools icon opens the popover with Filter/Label/Project tabs, each listing real data (or fixtures in tests) in a searchable select. *(verified against a real account 2026-07-25: 28 filters list, and a 14-view filter renders 102 tasks where it rendered none — the 2026-07-25 amendment)*
 - [x] Picking a project renders its tasks grouped: no-section tasks first, then each section with its header, in Todoist's own order (verified against a fixture project with 3 sections).
 - [x] Picking a filter or label renders its tasks in API order; an invalid filter query shows Todoist's error message text, not a generic failure.
 - [x] Cards show: priority circle (fixture tasks with API priority 4/3/2/1 render red/orange/blue/neutral respectively — the named inversion test passes), plain-text title (a fixture with markdown link renders the link text only), and one ellipsized description line only when a description exists.
@@ -216,6 +259,7 @@ gets skipped and then bites.
 - [x] Logged out: the area shows only ADR 11's login button — no tools icon, no list.
 - [x] The proxy rejects non-GET verbs and unlisted paths (supertest); no frontend code holds or receives a Todoist token.
 - [x] Rapid source switching never shows the previous source's tasks (abort test).
+- [x] Below `sm` the tools icon opens a modal, not a popover: it measures over 85 % of the viewport width and over 80 % of its height, its options are on screen without a second dropdown, typing filters them in place, and picking one closes the modal and renders the tasks (E2E at 590×900, all four browser projects, 2026-07-25 amendment). At/above `sm` the popover is unchanged.
 - [x] The header's refresh button refetches the current source in place: the rendered tasks stay visible, the icon spins (`aria-busy`), no skeleton flash, and the updated list lands (E2E, 2026-07-25 amendment).
 - [x] Stories cover card variants and all list states in both schemes; a11y contrast passes on card text and priority circles against the surface token.
 - [x] The ADR 09 E2E block (stubbed proxy) is active and green; `npm test`, `npm run build`, `npm run build-storybook` all green.

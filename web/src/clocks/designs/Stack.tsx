@@ -24,15 +24,15 @@ export const stackTheme: ClockTheme = {
 };
 
 export function Stack({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
-  const units = unitCount(totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
+  const units = unitCount(p.totalSeconds);
   const spent = Math.round(p.elapsedFraction * units);
 
   return (

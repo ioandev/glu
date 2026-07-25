@@ -1,0 +1,15 @@
+/* ADR 29. The modal frame only — every colour, border and font in the document
+   itself comes from ADR 26's `legal.module.css`, which is the point of sharing
+   the components rather than the class names.
+
+   Deliberately no colour and no background here: the modal's surface is the
+   drawer's panel treatment (ADR 15 tokens), already applied by Mantine's
+   `classNames.content`. */
+
+.modalBody {
+  /* Same measure as the document route: prose stops being readable long before
+     a 90%-width modal runs out of room. */
+  max-width: 72ch;
+  margin: 0 auto;
+  padding-bottom: 8px;
+}

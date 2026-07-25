@@ -27,14 +27,14 @@ const R = 100;
 const CIRC = 2 * Math.PI * R;
 
 export function Mono({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={monoTheme} accent={accent} state={state}>

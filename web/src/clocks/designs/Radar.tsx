@@ -24,14 +24,14 @@ export const radarTheme: ClockTheme = {
 };
 
 export function Radar({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   // Needle and trail move by `transform`/`rotate` only — regenerating the conic
   // gradient 20x a second is jank on an old tablet (ADR 07).
   const angle = p.elapsedFraction * 360;

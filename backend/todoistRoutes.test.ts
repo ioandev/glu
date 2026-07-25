@@ -4,7 +4,13 @@ import { sealData } from "iron-session";
 import { createApp } from "./app";
 import { readConfig, type ServerConfig } from "./config";
 import { SESSION_COOKIE, type TokenSet } from "./session";
-import { TASK_CAP, toPlainText, toUiPriority, toUiTask } from "./todoistRoutes";
+import {
+  TASK_CAP,
+  splitFilterViews,
+  toPlainText,
+  toUiPriority,
+  toUiTask,
+} from "./todoistRoutes";
 
 const config: ServerConfig = readConfig({
   TODOIST_CLIENT_ID: "id",
@@ -70,6 +76,60 @@ describe("plain-text titles (ADR 12)", () => {
     expect(toPlainText("Write ADR 15 — palette crossfade")).toBe(
       "Write ADR 15 — palette crossfade",
     );
+  });
+});
+
+describe("filter views (ADR 12 amendment)", () => {
+  it("splits a multi-view filter on its top-level commas", () => {
+    expect(splitFilterViews("@yolo, #Week N & /Doing, #Inbox")).toEqual([
+      "@yolo",
+      "#Week N & /Doing",
+      "#Inbox",
+    ]);
+  });
+
+  it("leaves commas inside parentheses and quotes alone", () => {
+    expect(splitFilterViews("(due: yesterday | today), search: \"a, b\"")).toEqual([
+      "(due: yesterday | today)",
+      'search: "a, b"',
+    ]);
+  });
+
+  it("passes a single-view filter through untouched", () => {
+    expect(splitFilterViews("today & @glu")).toEqual(["today & @glu"]);
+  });
+
+  it("drops empty views from a trailing or doubled comma", () => {
+    expect(splitFilterViews("p1,, p2,")).toEqual(["p1", "p2"]);
+  });
+});
+
+describe("listing filters (ADR 12 amendment)", () => {
+  it("reads saved filters through the Sync API, in Todoist's order", async () => {
+    // GET /api/v1/filters does not exist — this route is the one POST that
+    // reads. The mock's shape is the sync response's, not a paged list's.
+    fetchMock.mockResolvedValueOnce(
+      json({
+        filters: [
+          { id: "2", name: "Later", query: "@later", item_order: 1 },
+          { id: "1", name: "PRIORITY PASS", query: "@yolo, p1", item_order: 0 },
+          { id: "3", name: "Gone", query: "@gone", item_order: 2, is_deleted: true },
+        ],
+      }),
+    );
+
+    const response = await request(app())
+      .get("/glu/api/todoist/filters")
+      .set("Cookie", [await liveCookie()]);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/v1/sync");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ sync_token: "*", resource_types: ["filters"] });
+    expect(response.body.items).toEqual([
+      { id: "1", name: "PRIORITY PASS", query: "@yolo, p1" },
+      { id: "2", name: "Later", query: "@later" },
+    ]);
   });
 });
 
@@ -181,6 +241,31 @@ describe("task fetching (ADR 12)", () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("upstream_error");
     expect(response.body.message).toContain("failed");
+  });
+
+  it("fetches one request per filter view and unions them in view order", async () => {
+    // `p1, p2` upstream means p1 AND p2 — the union is ours to assemble.
+    fetchMock
+      .mockResolvedValueOnce(json({ results: [{ id: "1", content: "One" }], next_cursor: null }))
+      .mockResolvedValueOnce(
+        json({
+          results: [
+            { id: "1", content: "One" }, // in both views: kept once, at its first spot
+            { id: "2", content: "Two" },
+          ],
+          next_cursor: null,
+        }),
+      );
+
+    const response = await request(app())
+      .get("/glu/api/todoist/tasks?type=filter&id=f1&query=%40yolo%2C%20p1")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("query=%40yolo");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("query=p1");
+    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["1", "2"]);
+    expect(response.body.truncated).toBe(false);
   });
 
   it("returns sections in Todoist's own order", async () => {

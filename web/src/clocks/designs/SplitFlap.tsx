@@ -24,14 +24,14 @@ export const splitFlapTheme: ClockTheme = {
 };
 
 export function SplitFlap({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   const digits = [...p.minutes, ...p.seconds];
 
   return (

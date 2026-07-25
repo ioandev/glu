@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import {
   TODOIST_AUTHORIZE_URL,
@@ -12,7 +11,9 @@ import {
   STATE_COOKIE,
   clearSession,
   clearState,
+  mintState,
   readSession,
+  verifyState,
   writeSession,
   writeState,
   type TokenSet,
@@ -33,7 +34,7 @@ export function authRoutes(config: ServerConfig): Router {
       res.status(503).json({ error: "todoist_not_configured" });
       return;
     }
-    const state = randomBytes(24).toString("base64url");
+    const state = mintState(config);
     writeState(res, config, state);
 
     const url = new URL(TODOIST_AUTHORIZE_URL);
@@ -52,6 +53,13 @@ export function authRoutes(config: ServerConfig): Router {
     // A mismatch is a CSRF attempt or a stale tab: no session, ever.
     if (!state || !expected || state !== expected) {
       res.status(403).json({ error: "state_mismatch" });
+      return;
+    }
+    // Additional to the cookie check, never instead of it: a state that carries
+    // no valid verification-token signature was not minted here. No-op unless
+    // TODOIST_VERIFICATION_TOKEN is set (ADR 11 amendment).
+    if (!verifyState(config, state)) {
+      res.status(403).json({ error: "state_unverified" });
       return;
     }
     if (!code) {

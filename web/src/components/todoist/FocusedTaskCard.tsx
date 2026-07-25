@@ -31,6 +31,19 @@ export function FocusedTaskCard({
   onUnfocus: () => void;
   onComplete?: () => void;
 }) {
+  // Title + description line, written once: the tap target is a button only when
+  // there is a detail to open, exactly like a list card (ADR 12).
+  const body = (
+    <>
+      <span className={classes.focusedTitle}>{task.title}</span>
+      {task.description ? (
+        <span className={classes.focusedDescription} data-testid="focused-description">
+          {task.description}
+        </span>
+      ) : null}
+    </>
+  );
+
   return (
     <div className={classes.focusedCard} data-testid="focused-task">
       <div className={classes.focusedTopRow}>
@@ -51,14 +64,14 @@ export function FocusedTaskCard({
         />
         {onOpen ? (
           <UnstyledButton
-            className={classes.focusedTitle}
+            className={classes.focusedBody}
             onClick={onOpen}
             aria-label={`Open “${task.title}”`}
           >
-            {task.title}
+            {body}
           </UnstyledButton>
         ) : (
-          <span className={classes.focusedTitle}>{task.title}</span>
+          <div className={classes.focusedBody}>{body}</div>
         )}
       </div>
 

@@ -1,0 +1,162 @@
+/* ADR 26. Every value here is a chrome token (ADR 15) — these pages restyle
+   with the direction like everything else, and a literal colour would be a
+   review defect even on a page nobody themes for fun.
+
+   Note what is deliberately absent: any `overflow` or `height` rule. The
+   `100dvh` no-scroll contract belongs to `AppShell.module.css`'s `.shell`, so
+   simply not being the shell is what lets a long document scroll. */
+
+.page {
+  min-height: 100dvh;
+  background: var(--glu-page-bg);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-font-sans), system-ui, sans-serif;
+  /* Wide enough to breathe on a tablet, narrow enough to stay readable. */
+  padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px) 96px;
+}
+
+.column {
+  max-width: 72ch;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-bottom: 16px;
+  border-bottom: var(--glu-border);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--glu-heading-family);
+  font-weight: var(--glu-heading-weight);
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  line-height: 1.15;
+}
+
+.updated {
+  margin: 4px 0 0;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.intro {
+  margin: 24px 0 0;
+  padding: 16px 20px;
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  line-height: 1.65;
+}
+
+.sections {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-family: var(--glu-heading-family);
+  font-weight: var(--glu-heading-weight);
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.body {
+  line-height: 1.65;
+}
+
+.body p {
+  margin: 0 0 10px;
+}
+
+.body p:last-child {
+  margin-bottom: 0;
+}
+
+.body ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.body li {
+  margin-bottom: 6px;
+}
+
+.body li:last-child {
+  margin-bottom: 0;
+}
+
+.body code {
+  font-family: var(--glu-font-mono), monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: var(--glu-radius-control);
+  background: var(--glu-surface-strong);
+}
+
+.link {
+  color: var(--glu-accent-text);
+  text-underline-offset: 3px;
+}
+
+/* Cards, not a table: a three-column table at half-tablet width is unreadable,
+   and the data here is short enough that the card form loses nothing. */
+.dataList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.dataItem {
+  padding: 12px 14px;
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+}
+
+.dataTerm {
+  font-family: var(--glu-label-family);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  font-size: var(--glu-label-size);
+}
+
+.dataDetail {
+  margin: 4px 0 0;
+  color: var(--glu-muted);
+  line-height: 1.55;
+}
+
+.footer {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: var(--glu-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+/* ≥44 px even here: the tablet-first rule has no boilerplate exemption. */
+.footerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  font-size: var(--glu-label-size);
+}

@@ -6,6 +6,24 @@
   the chrome mockups in **ADR 15** contain illustrative clock lookalikes
   (one even mislabels a hotkey) which are never used; ADR 07 components
   render inside every ADR 15 chrome composite.
+- Amended: 2026-07-25 — **the props contract is milliseconds, not seconds:
+  `{ remainingMs, totalMs, session, showSession, state }`** (owner report: the
+  animations stepped). Whole seconds put a 1 Hz floor under every geometry no
+  matter how often the component re-renders, so ADR 02's move to a frame-paced
+  tick would have bought nothing on its own. `clockProgress()` absorbs the whole
+  change: its **fractions are now continuous**, while `time`/`minutes`/`seconds`
+  stay on ADR 02's ceiling-rounded whole second and a new `remainingSeconds` /
+  `totalSeconds` pair serves designs that count discrete units. Digits still
+  change once a second — only geometry moves per frame.
+
+- Amended: 2026-07-25 — **hard gradient stops are cut by `clip-path`, not by the
+  gradient** (owner report: some clocks' lines look stepped). Radar's conic sweep
+  and Bauhaus's half-disc drew their straight edge as a colour stop, and a
+  gradient stop is rasterized with no antialiasing — a visible staircase down an
+  edge that turns all run. Both now paint past where the edge reads and clip back
+  to it, which *is* antialiased. The clip lives in each element's own
+  coordinates, so the "rotate with `transform`, never repaint the gradient" rule
+  below is unaffected.
 
 - Deviation (2026-07-24, implementation): the inventory **table** lists seven
   natively-dark designs (1b, 1d, 1e, 2a, 2c, 2d, 2h); the prose beneath it says
@@ -75,17 +93,20 @@ matching the product brief ("some require session… one requires the total").
 ## Decision
 
 - **One React component per clock, 18 total, pure functions of their props.**
-  No `Date.now()`, no internal timers — the 50 ms tick (ADR 02) drives them via
+  No `Date.now()`, no internal timers — the display tick (ADR 02) drives them via
   props. Purity is what makes them storybookable at any frozen instant and
   cheap to test.
 - **One shared props contract for all 18:**
-  `{ remainingSeconds, totalSeconds, session, showSession, state }`.
+  `{ remainingMs, totalMs, session, showSession, state }` (seconds until the
+  2026-07-25 amendment).
   The brief says progress is "time left in seconds" — but a ring cannot draw an
   arc from remaining alone; every geometry needs the fraction
-  `remaining/total`, so **`totalSeconds` is in the contract for all clocks and
+  `remaining/total`, so **the total is in the contract for all clocks and
   *displayed* only by Terminal**. A shared `clockProgress()` helper derives
   elapsed/remaining fractions once — 18 hand-rolled inversions is how
-  off-by-one-direction bugs ship. `state` is included now so paused/finished
+  off-by-one-direction bugs ship — and it is also where the two resolutions
+  part: continuous fractions for geometry, whole seconds for digits and for
+  discrete units (Meridian's 60 ticks, Grid/Stack dots, Terminal's bar). `state` is included now so paused/finished
   render sanely (static geometry, 00:00); per-state custom art is future
   polish, not required here.
 - **Session display: driven by `session` + `showSession`; the toggle itself
@@ -120,7 +141,7 @@ matching the product brief ("some require session… one requires the total").
 
 ## Options considered
 
-- **Skip `totalSeconds`, pass a precomputed fraction** — loses the mm:ss
+- **Skip the total, pass a precomputed fraction** — loses the mm:ss
   source of truth and Terminal's total display; two props that can disagree.
   Rejected.
 - **Scale fixed-size cards with `transform: scale()`** — quick, but blurs
@@ -145,7 +166,7 @@ matching the product brief ("some require session… one requires the total").
 - `clockProgress()` helper; shared use of ADR 02's mm:ss formatter (ceiling).
 - `clocks.ts` registry.
 - Fonts via `next/font`.
-- One story per clock (controls: `remainingSeconds`, `totalSeconds`, `session`,
+- One story per clock (controls: `remainingMs`, `totalMs`, `session`,
   `showSession`, `state`; canvas painted with the clock's own page background
   per scheme) + an all-clocks overview grid story.
 - Tests per ADR 03's checklist precedent (list in outline).
@@ -179,13 +200,15 @@ matching the product brief ("some require session… one requires the total").
    - **Blend-mode designs (Pill, Tide, Field)**: `mix-blend-mode: difference`
      needs `isolation: isolate` on the clock root or the text blends against
      the *site* background ADR 08 will paint behind it.
-   - **Radar**: don't regenerate the conic-gradient every 50 ms tick — rotate
+   - **Radar**: don't regenerate the conic-gradient every tick — rotate
      needle + trail with `transform` (compositor-cheap); a repainting gradient
-     at 20 fps is jank on old tablets.
+     at frame rate is jank on old tablets.
    - **Aurora**: two full-size blur(50px) layers are GPU-expensive at
      viewport size; pre-blur as fixed-size layers, spot-check on a real tablet.
+     Drift them with `transform`, not `left`/`right` (2026-07-25 amendment):
+     an offset change re-rasterizes the blur, and it now moves every frame.
    - **Grid/Stack (25 units = 25 minutes)**: unit counts must derive from
-     `totalSeconds` (e.g. one per minute, capped) — a 5-minute run showing 25
+     the total (e.g. one per minute, capped) — a 5-minute run showing 25
      dots is a lie. Layout must hold from 5 to 99 minutes; formatter caps at
      99:59.
    - **Split-flap**: static digits this ADR; the flip transition is polish.
@@ -199,7 +222,7 @@ matching the product brief ("some require session… one requires the total").
      output — no clock grows its own mm:ss math.
    - `showSession=false` removes the session element for all 12 that have
      one; `session` value is reflected when shown.
-   - Terminal renders `--focus Nm` from `totalSeconds`.
+   - Terminal renders `--focus Nm` from the run's total.
    - Purity: same props → identical markup across two renders.
 5. **A11y pass**: ADR 03's addon must show no contrast violations for the time
    text against each clock's own background, both schemes — this is where the
@@ -221,8 +244,9 @@ scheme for Terminal.
 - [x] Blend-mode clocks (Pill, Tide, Field) render correctly inside a story canvas painted an arbitrary color (isolation verified).
 - [x] Grid and Stack show unit counts derived from the total (5-minute run ≠ 25 dots); all clocks hold their layout at 99:59.
 - [x] With `showSession` off, no session element renders on any clock; on, the count (no "/target") appears on the 12 flagged clocks.
-- [x] Terminal shows `--focus Nm` matching `totalSeconds`.
+- [x] Terminal shows `--focus Nm` matching the run's total.
 - [x] No clock component references `Date.now`/`new Date` (grep clean); the purity test passes.
+- [x] (2026-07-25 amendment) Geometry moves *inside* a second: with a run going in Chromium, sampling every animation frame for ~700–900 ms gives a distinct value per frame — Halo's ring offset 54/55, Aurora's glow transform 42/43, Radar's needle rotation 42/43 — while the mm:ss text still changes exactly once.
 - [x] Fonts load via `next/font` — no `fonts.googleapis.com` request in the app or Storybook network panel.
 - [x] `npm test`, `npm run build`, `npm run build-storybook` all green.
 

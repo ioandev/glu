@@ -13,6 +13,45 @@ export const MIN_TOTAL_MS = 1 * MINUTE;
 /** ADR 07: the clock formatter caps at 99:59 so no design's layout breaks. */
 export const MAX_DISPLAY_SECONDS = 99 * 60 + 59;
 
+/** The ladder as milliseconds — membership is the whole definition of "custom". */
+const PRESET_DURATIONS_MS: ReadonlySet<number> = new Set(
+  PRESET_MINUTES.map((minutes) => minutes * MINUTE),
+);
+
+/** ADR 32: is this duration one of the seven the row already offers? */
+export function isPresetDuration(ms: number): boolean {
+  return PRESET_DURATIONS_MS.has(ms);
+}
+
+export interface DurationOption {
+  ms: number;
+  label: string;
+  /** ADR 32: the transient rung, present only while the selection is off-ladder. */
+  custom: boolean;
+}
+
+/**
+ * The preset row's rungs for a given selection (ADR 32): the fixed ladder, plus
+ * the selected duration itself when ± has walked it off the ladder — inserted
+ * **in order**, because the row reads as a ladder of lengths and a `3m` after
+ * `60m` would read as "3 minutes is the longest option".
+ *
+ * `mm:ss` for a non-whole minute is defensive rather than reachable: presets and
+ * ± both move in whole minutes, so only a hand-edited blob gets there — but
+ * `${round}m` would label it `20m` next to the real `20m`, which is one
+ * ambiguous accessible name away from a test that passes on the wrong button.
+ */
+export function durationOptions(selectedMs: number): DurationOption[] {
+  const ladder = PRESET_MINUTES.map((minutes) => ({
+    ms: minutes * MINUTE,
+    label: `${minutes}m`,
+    custom: false,
+  }));
+  if (isPresetDuration(selectedMs)) return ladder;
+  const label = selectedMs % MINUTE === 0 ? `${selectedMs / MINUTE}m` : formatRemaining(selectedMs);
+  return [...ladder, { ms: selectedMs, label, custom: true }].sort((a, b) => a.ms - b.ms);
+}
+
 /**
  * Whole seconds remaining, rounded **up** — `floor` would show 19:59 the instant
  * a 20:00 timer starts, which reads as a bug (ADR 02).

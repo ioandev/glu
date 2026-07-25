@@ -23,8 +23,8 @@ export const eclipseTheme: ClockTheme = {
   },
 };
 
-export function Eclipse({ remainingSeconds, totalSeconds, state, accent }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+export function Eclipse({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const p = clockProgress(remainingMs, totalMs);
   // Fully clear at the start, fully occluded at the end.
   const shift = -100 + p.elapsedFraction * 100;
 

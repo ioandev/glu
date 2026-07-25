@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, within } from "storybook/test";
 import { CLOCKS, CLOCK_BY_ID } from "./registry";
+import { MINUTE, SECOND } from "@/lib/time";
 import type { ClockProps } from "./types";
 
 /**
@@ -23,16 +24,19 @@ const meta = {
   parameters: { layout: "centered" },
   args: {
     id: "halo",
-    remainingSeconds: 750,
-    totalSeconds: 1500,
+    remainingMs: 750 * SECOND,
+    totalMs: 1500 * SECOND,
     session: 3,
     showSession: true,
     state: "running" as const,
   },
   argTypes: {
     id: { control: "select", options: CLOCKS.map((c) => c.id) },
-    remainingSeconds: { control: { type: "range", min: 0, max: 5940, step: 1 } },
-    totalSeconds: { control: { type: "range", min: 60, max: 5940, step: 60 } },
+    // A sub-second step is the point of the control: dragging it across one
+    // second is how you see whether a design's geometry moves continuously or
+    // jumps (ADR 07, amended 2026-07-25).
+    remainingMs: { control: { type: "range", min: 0, max: 5940 * SECOND, step: 100 } },
+    totalMs: { control: { type: "range", min: MINUTE, max: 5940 * SECOND, step: MINUTE } },
     session: { control: { type: "number", min: 0, max: 30 } },
     showSession: { control: "boolean" },
     state: {
@@ -76,7 +80,7 @@ export const FullHalfEmpty: Story = {
     <div style={{ display: "flex", gap: 16 }}>
       {[1500, 750, 0].map((remaining) => (
         <div key={remaining} style={{ width: 240, height: 320 }}>
-          <ClockStage {...args} remainingSeconds={remaining} />
+          <ClockStage {...args} remainingMs={remaining * SECOND} />
         </div>
       ))}
     </div>

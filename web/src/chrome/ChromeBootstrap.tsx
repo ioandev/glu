@@ -32,6 +32,19 @@ el.setAttribute('data-chrome',chrome);
 el.setAttribute('data-clock',clock);
 })();`;
 
+/**
+ * Both tags below carry `suppressHydrationWarning` **because of the nonce**, and
+ * for no other reason. A header-delivered CSP makes the browser *hide* the
+ * nonce: on insertion it blanks the `nonce` content attribute and keeps the
+ * value in the element's `.nonce` property, so a stylesheet can't exfiltrate it
+ * through an attribute selector. React hydration reads attributes, so it sees
+ * `""` in the DOM against the real nonce in the props and reports an attribute
+ * mismatch it explicitly won't patch up. Nothing is broken — the scripts already
+ * ran, at parse time, with the nonce the CSP required — but the warning is real
+ * console noise in dev, and a permanent one, since the hiding is spec'd
+ * behaviour we depend on. Suppressing it is per-element and covers only these
+ * two tags, whose content is `dangerouslySetInnerHTML` that React never diffs.
+ */
 export function ChromeBootstrap({
   clockThemes,
   nonce,
@@ -45,9 +58,10 @@ export function ChromeBootstrap({
       <style
         data-glu-chrome-tokens=""
         nonce={nonce}
+        suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: buildChromeStylesheet(clockThemes) }}
       />
-      <script nonce={nonce} dangerouslySetInnerHTML={{ __html: bootstrap }} />
+      <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: bootstrap }} />
     </>
   );
 }

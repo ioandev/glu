@@ -216,4 +216,18 @@ describe("chrome bootstrap trusts nothing from the blob (ADR 15)", () => {
     const nonced = renderToStaticMarkup(<ChromeBootstrap nonce="abc123" />);
     expect(nonced.match(/nonce="abc123"/g)).toHaveLength(2);
   });
+
+  /**
+   * A header-delivered CSP blanks the `nonce` *attribute* in the DOM, so
+   * hydration compares `""` against the nonce in the props and warns. Both tags
+   * opt out — checked on the element tree, since the prop is a React directive
+   * and never reaches the markup the test above reads.
+   */
+  it("opts both inline tags out of the nonce hydration warning", () => {
+    const tags = ChromeBootstrap({ nonce: "abc123" }).props.children as React.ReactElement<{
+      suppressHydrationWarning?: boolean;
+    }>[];
+    expect(tags.map((tag) => tag.type)).toEqual(["style", "script"]);
+    for (const tag of tags) expect(tag.props.suppressHydrationWarning).toBe(true);
+  });
 });

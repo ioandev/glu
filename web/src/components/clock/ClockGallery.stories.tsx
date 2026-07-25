@@ -57,6 +57,9 @@ export const Finished: Story = {
 };
 
 export const ChevronsFlipAndWrap: Story = {
+  // The chevrons are tablet-and-above chrome (ADR 08 amendment) — pin the
+  // viewport rather than letting the runner's default decide.
+  globals: { viewport: { value: "tablet" } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const next = canvas.getByRole("button", { name: "Next clock design" });
@@ -82,6 +85,7 @@ export const ChevronsFlipAndWrap: Story = {
  * before and after, and the direction follows the way the roster is moving.
  */
 export const FlipSlidesDirectionally: Story = {
+  globals: { viewport: { value: "tablet" } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const slot = canvas.getByTestId("clock-slot");
@@ -114,11 +118,38 @@ export const FlipSlidesDirectionally: Story = {
 };
 
 export const ChevronsAreTouchSized: Story = {
+  globals: { viewport: { value: "tablet" } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     for (const name of ["Previous clock design", "Next clock design"]) {
-      const box = canvas.getByRole("button", { name }).getBoundingClientRect();
+      const chevron = canvas.getByRole("button", { name });
+      const box = chevron.getBoundingClientRect();
       await expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+      // Quiet, not gone: 10% is the resting state above `sm` (ADR 08 amendment).
+      await expect(getComputedStyle(chevron).opacity).toBe("0.1");
+    }
+  },
+};
+
+/**
+ * Below `sm` the chevrons are not rendered at all — the clock is the whole
+ * first viewport and the swipe is the only flip, which is what the one-time
+ * hint exists to say (ADR 08 amendment).
+ */
+export const NoChevronsOnThePhone: Story = {
+  globals: { viewport: { value: "halfTablet" } },
+  render: () => (
+    <div style={{ width: "100%", height: "60vh" }}>
+      <ClockGallery />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const name of ["Previous clock design", "Next clock design"]) {
+      // Out of the accessibility tree…
+      await expect(canvas.queryByRole("button", { name })).toBeNull();
+      // …because it is not painted at all.
+      await expect(getComputedStyle(canvas.getByLabelText(name)).display).toBe("none");
     }
   },
 };

@@ -26,14 +26,14 @@ export const meridianTheme: ClockTheme = {
 const TICKS = 60;
 
 export function Meridian({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   const lit = Math.round(p.remainingFraction * TICKS);
 
   return (

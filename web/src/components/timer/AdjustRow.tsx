@@ -6,9 +6,9 @@ import { useGluStore } from "@/store/gluStore";
 import classes from "./timer.module.css";
 
 const ADJUSTMENTS = [
-  { label: "+2", minutes: 2 },
+  { label: "+1", minutes: 1 },
   { label: "+5", minutes: 5 },
-  { label: "−2", minutes: -2 },
+  { label: "−1", minutes: -1 },
   { label: "−5", minutes: -5 },
 ] as const;
 
@@ -24,7 +24,9 @@ export function AdjustRow() {
           className={classes.adjustButton}
           variant="default"
           onClick={() => adjust(minutes * MINUTE)}
-          aria-label={`${minutes > 0 ? "Add" : "Subtract"} ${Math.abs(minutes)} minutes`}
+          aria-label={`${minutes > 0 ? "Add" : "Subtract"} ${Math.abs(minutes)} ${
+            Math.abs(minutes) === 1 ? "minute" : "minutes"
+          }`}
         >
           {label}
         </Button>

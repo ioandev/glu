@@ -28,6 +28,10 @@
   and reads the per-request nonce that `web/src/middleware.ts` sets, passing
   it to `ColorSchemeScript` and to ADR 15's `ChromeBootstrap`. The
   colour-scheme behaviour and `mantineHtmlProps` hydration fix are unchanged.
+  `ColorSchemeScript` also takes `suppressHydrationWarning` — the nonce, not the
+  colour scheme, is what mismatches: a header-delivered CSP blanks the `nonce`
+  attribute in the DOM and keeps the value on `.nonce`, which hydration reads as
+  a difference (ADR 16 amendment). `mantineHtmlProps` covers `<html>` only.
 
 - Deviation (2026-07-24, implementation): `create-next-app` refuses a non-empty
   directory, so the scaffold was generated in a temp dir and copied in — same

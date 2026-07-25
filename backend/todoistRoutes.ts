@@ -2,7 +2,13 @@ import { Router, type Request, type Response } from "express";
 import { Readable } from "node:stream";
 import type { ServerConfig } from "./config";
 import { requireTokens } from "./authRoutes";
-import { TodoistError, todoistGet, todoistPost, type TokenSet } from "./todoist";
+import {
+  TodoistError,
+  todoistDelete,
+  todoistGet,
+  todoistPost,
+  type TokenSet,
+} from "./todoist";
 
 /**
  * A read-only, **allowlisted** surface (ADR 12) — never a blind passthrough.
@@ -82,6 +88,15 @@ export function toUiTask(task: RawTask): UiTask {
   };
 }
 
+/** Sync-API shape (see the `/filters` route) — snake_case, `item_order`. */
+export interface RawFilter {
+  id: string;
+  name: string;
+  query?: string;
+  item_order?: number;
+  is_deleted?: boolean;
+}
+
 interface Paged<T> {
   results?: T[];
   next_cursor?: string | null;
@@ -106,6 +121,83 @@ async function collect<T>(
 
   const truncated = items.length > cap || Boolean(cursor);
   return { items: items.slice(0, cap), truncated };
+}
+
+/**
+ * A Todoist filter can hold **several views**, separated by top-level commas —
+ * the UI stacks them as separate lists and shows the union. `/tasks/filter`
+ * does not: it reads the comma as AND, so `p1, p2` returns 0 tasks while
+ * `p1 | p2` returns 15 (verified against the live API 2026-07-25). A
+ * multi-view filter therefore came back empty or near-empty and looked broken.
+ *
+ * Commas inside parentheses or quotes belong to the expression, not to the
+ * view list — `search: "a, b"` is one view.
+ */
+export function splitFilterViews(query: string): string[] {
+  const views: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quoted = false;
+
+  for (const char of query) {
+    if (char === '"') quoted = !quoted;
+    else if (!quoted && char === "(") depth += 1;
+    else if (!quoted && char === ")") depth = Math.max(0, depth - 1);
+
+    if (char === "," && depth === 0 && !quoted) {
+      views.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  views.push(current);
+
+  return views.map((view) => view.trim()).filter(Boolean);
+}
+
+/** A filter with more views than this is pathological; the list says truncated. */
+export const FILTER_VIEW_CAP = 20;
+/** Views go out a few at a time: sequential is slow (14 views ≈ 4 s), all-at-once
+ *  is a burst at Todoist's limits for a list that refetches on every focus. */
+const FILTER_VIEW_BATCH = 4;
+
+/**
+ * Fetches every view of a filter and unions them **in view order**, which is
+ * the order Todoist itself shows. A task matching two views appears once, at
+ * its first position — the flat list has no view headers to repeat it under.
+ */
+async function collectFilterViews(
+  tokens: TokenSet,
+  query: string,
+): Promise<{ items: RawTask[]; truncated: boolean }> {
+  const views = splitFilterViews(query);
+  const fetching = views.slice(0, FILTER_VIEW_CAP);
+  let truncated = views.length > fetching.length;
+  if (truncated) {
+    console.warn(`[glu] filter has ${views.length} views; fetching the first ${FILTER_VIEW_CAP}`);
+  }
+
+  const byId = new Map<string, RawTask>();
+  for (let start = 0; start < fetching.length; start += FILTER_VIEW_BATCH) {
+    const batch = await Promise.all(
+      fetching
+        .slice(start, start + FILTER_VIEW_BATCH)
+        .map((view) => collect<RawTask>(tokens, "/tasks/filter", { query: view }, TASK_CAP)),
+    );
+    for (const page of batch) {
+      truncated ||= page.truncated;
+      for (const task of page.items) if (!byId.has(task.id)) byId.set(task.id, task);
+    }
+    // Enough for the cap and views still unread: stop, and say so.
+    if (byId.size >= TASK_CAP && start + FILTER_VIEW_BATCH < fetching.length) {
+      truncated = true;
+      break;
+    }
+  }
+
+  const items = [...byId.values()];
+  return { items: items.slice(0, TASK_CAP), truncated: truncated || items.length > TASK_CAP };
 }
 
 function upstreamStatus(error: unknown): number {
@@ -155,16 +247,28 @@ export function todoistRoutes(config: ServerConfig): Router {
     }),
   );
 
+  /**
+   * **Filters are not a REST resource.** `GET /api/v1/filters` 404s — verified
+   * against the live API 2026-07-25; ADR 12's endpoint sweep recorded it as
+   * real and nothing caught it, because every test mocks the upstream. Saved
+   * filters exist only in the Sync API, so this one route reads them through a
+   * `filters`-only sync. Still a read, still allowlisted: `/sync` is never
+   * exposed as a proxy path, only used as one.
+   */
   router.get(
     "/filters",
     guarded(async (_req, res, tokens) => {
-      const { items } = await collect<{ id: string; name: string; query?: string }>(
-        tokens,
-        "/filters",
-        {},
-        200,
-      );
-      res.json({ items: items.map((f) => ({ id: f.id, name: f.name, query: f.query })) });
+      const body = await todoistPost<{ filters?: RawFilter[] }>(tokens, "/sync", {
+        sync_token: "*",
+        resource_types: ["filters"],
+      });
+      const items = (body.filters ?? [])
+        .filter((f) => !f.is_deleted)
+        // Todoist's own filter order, like every other list here.
+        .sort((a, b) => (a.item_order ?? 0) - (b.item_order ?? 0))
+        .slice(0, 200)
+        .map((f) => ({ id: String(f.id), name: f.name, query: f.query }));
+      res.json({ items });
     }),
   );
 
@@ -200,8 +304,10 @@ export function todoistRoutes(config: ServerConfig): Router {
         path = "/tasks/filter";
         params = { query: `@${query || id}` };
       } else if (type === "filter") {
-        path = "/tasks/filter";
-        params = { query: query || id };
+        // One request per view — see `collectFilterViews`.
+        const fetched = await collectFilterViews(tokens, query || id);
+        res.json({ items: fetched.items.map(toUiTask), truncated: fetched.truncated, cap: TASK_CAP });
+        return;
       } else {
         res.status(400).json({ error: "unknown_source_type" });
         return;
@@ -286,9 +392,10 @@ export function todoistRoutes(config: ServerConfig): Router {
 
   /**
    * The allowlist's first non-GET (ADR 14) — and deliberately **not** a general
-   * comment API. The server accepts `{taskId, minutes}` and composes the text
-   * itself, so even a hijacked frontend can only post well-formed time comments
-   * within sane bounds.
+   * comment API. The server accepts `{taskId, minutes, environment?}` — the
+   * last one an array of *enumerated keys* (ADR 27), never text — and composes
+   * the sentence itself, so even a hijacked frontend can only post well-formed
+   * time comments within sane bounds.
    */
   router.post(
     "/comment",
@@ -305,9 +412,48 @@ export function todoistRoutes(config: ServerConfig): Router {
         return;
       }
 
-      const content = composeTimeComment(minutes);
-      await todoistPost(tokens, "/comments", { task_id: taskId, content });
-      res.json({ posted: true, content });
+      // ADR 27: enumerated keys only. Missing, malformed and unknown all mean
+      // "no environment" — the composer decides that, not this handler.
+      const content = composeTimeComment(
+        minutes,
+        (req.body as { environment?: unknown })?.environment,
+      );
+      const created = await todoistPost<RawComment>(tokens, "/comments", {
+        task_id: taskId,
+        content,
+      });
+      // The id is what makes the post undoable (ADR 14 amendment, c); an
+      // upstream that omits it simply yields a comment that cannot be undone.
+      res.json({ posted: true, content, id: created?.id ?? null });
+    }),
+  );
+
+  /**
+   * Write verb four, and the only destructive one (ADR 14 amendment, c): the
+   * 5-second undo window after a comment posts. Deliberately **not** a
+   * delete-by-id passthrough — that would hand an XSS the account's whole
+   * comment history. The id is checked before it is used: the comment must be
+   * ours and must parse as one of our own `[Nm]` time comments. Anything else
+   * is refused without a delete ever being issued.
+   */
+  router.delete(
+    "/comment/:id",
+    guarded(async (req, res, tokens) => {
+      const commentId = encodeURIComponent(String(req.params.id));
+      const [user, comment] = await Promise.all([
+        todoistGet<{ id: string }>(tokens, "/user"),
+        todoistGet<RawComment>(tokens, `/comments/${commentId}`),
+      ]);
+
+      // Same authorship rule as the totals route: a missing uid is ours.
+      const ours = !comment.posted_uid || comment.posted_uid === user.id;
+      if (!ours || parseTimeComment(comment.content ?? "") === null) {
+        res.status(403).json({ error: "not_a_time_comment" });
+        return;
+      }
+
+      await todoistDelete(tokens, `/comments/${commentId}`);
+      res.json({ deleted: true });
     }),
   );
 
@@ -522,12 +668,64 @@ export async function proxyAttachment(
 export const MAX_COMMENT_MINUTES = 40_320;
 
 /**
+ * ADR 27's vocabulary: the four sound environments share one `with …` clause,
+ * because "with music, with the TV on" reads like a struct and "with music and
+ * the TV on" reads like English. Order comes from this array, never from the
+ * caller's — an enumerated key buys a word, not a position in the sentence.
+ */
+const SOUND_FRAGMENTS = [
+  ["music", "music"],
+  ["podcast", "a podcast"],
+  ["tv", "the TV on"],
+  ["noisy", "background noise"],
+] as const;
+
+/** `a`, `a and b`, `a, b and c`. */
+function listPhrase(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The environment half of the comment (ADR 27). The caller sends **enumerated
+ * keys**, never prose, and this is the only place words come from — which is
+ * what keeps the write verb as narrow as ADR 14 left it. Unknown keys are
+ * ignored rather than rejected: a 400 here would strand a queued comment in
+ * the outbox's permanent-failure path and lose tracked time over a vocabulary
+ * mismatch.
+ */
+export function environmentSuffix(raw: unknown): string {
+  if (!Array.isArray(raw)) return "";
+  // A Set is the dedupe: repeats cannot lengthen the sentence.
+  const on = new Set(raw.filter((key): key is string => typeof key === "string"));
+
+  const clauses: string[] = [];
+  const sounds = SOUND_FRAGMENTS.filter(([key]) => on.has(key)).map(([, phrase]) => phrase);
+  if (sounds.length > 0) {
+    clauses.push(`with ${listPhrase(sounds)}`);
+  } else if (on.has("silence")) {
+    // ADR 02's exclusivity re-applied server-side: the reducer already
+    // guarantees it client-side, but "in silence, with the TV on" must stay out
+    // of the ledger even when the caller is not our UI.
+    clauses.push("in silence");
+  }
+  // Orthogonal equipment, so it is its own clause (ADR 02's rule, in grammar).
+  if (on.has("headphones")) clauses.push("on headphones");
+
+  return clauses.length === 0 ? "" : ` — ${clauses.join(", ")}`;
+}
+
+/**
  * The exact, parseable contract. Minutes-only, always — one format beats a
  * pretty one, and the bracket prefix is what the totals parser anchors on.
+ *
+ * ADR 27 appends the environment **after** the sentence, deliberately: nothing
+ * reads past the anchor, so every existing comment stays valid, totals keep
+ * summing, and the DELETE guard keeps recognising our own comments.
  */
-export function composeTimeComment(minutes: number): string {
+export function composeTimeComment(minutes: number, environment?: unknown): string {
   const unit = minutes === 1 ? "minute" : "minutes";
-  return `[${minutes}m] You spent ${minutes} ${unit} on this`;
+  return `[${minutes}m] You spent ${minutes} ${unit} on this${environmentSuffix(environment)}`;
 }
 
 /**

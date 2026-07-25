@@ -2,6 +2,39 @@
 
 - Status: Implemented (deviations noted)
 - Date: 2026-07-24
+- Amended: 2026-07-25 — **the hold policy becomes two user-owned toggles**
+  (owner brief: "add two buttons in settings: Stay awake on the website, Stay
+  awake when the timer is running"). This ADR shipped one hard-coded policy and
+  deliberately no UI, and parked exactly these two follow-ups: the opt-out, as
+  ADR 19's to own, and *"keeping the screen on outside timer states — anything
+  more is a new brief"*. The brief arrived, so both land at once, in the same
+  section.
+
+  Two persisted preferences (`stayAwakeWhileRunning`, default **true**;
+  `stayAwakeAlways`, default **false**) sit on top of the policy below, which is
+  otherwise unchanged. `whileRunning` gates it as written — grace and all;
+  `always` overrides it upward, holding the lock from mount to unmount with
+  `idle` included. **`always` subsumes `whileRunning` by construction** —
+  `wantsLock()` short-circuits on it — so there is no reconciliation rule, no
+  disabled control, and no third state to reason about.
+
+  One thing had to be decided rather than inherited: **the grace deadline stays
+  preference-independent.** It is a fact about the run's timeline, not about
+  what the user prefers, so it is recorded on every pause/finish and only
+  *consulted* through the toggles — opting back in two minutes into a grace
+  picks up the remaining three rather than restarting five. Everything else
+  holds: feature detection, silent failure, and the read-only-consumer status
+  (ADR 14's question still answers **No**; the spy test now walks the new modes
+  too). The defaults *are* the shipped behaviour, and both fields are additive,
+  so an existing `glu:v2` blob upgrades to byte-identical behaviour with no
+  version bump.
+
+  Rejected while writing it: **disabling the run toggle while the wide one is
+  on** — a disabled control hides the state the user set and would have to be
+  restored on the way back down, for a pair that is already unambiguous; and
+  **hiding the section where `navigator.wakeLock` is absent** — support is a
+  runtime fact a stored preference outlives, and this ADR's failure mode is
+  silence, not explanation.
 
 - Deviation (2026-07-24, implementation): status and visibility are handled in
   **one** effect. Two effects raced on mount — the visibility pass fired a second
@@ -62,7 +95,9 @@ to answer it.)
   makes the screen *try* to stay on.
 - **No UI**: no indicator, no toggle. An opt-out ("let the screen sleep")
   is a one-line candidate for the future settings ADR, recorded there-bound
-  — not smuggled in here.
+  — not smuggled in here. *(Superseded by the 2026-07-25 amendment: the
+  settings rows exist now. No **indicator** was ever added — the screen
+  being on is still the indicator.)*
 
 ## Options considered
 
@@ -95,10 +130,13 @@ to answer it.)
 
 - User-facing opt-out toggle → the **ADR 19** settings surface, via a
   future amendment there (19's v1 is Todoist-auth-only; pencil holds).
-- Any timer-behavior change — explicitly none; read-only consumer.
+  *(Landed 2026-07-25 — the amendment above; ADR 19 owns the row.)*
+- Any timer-behavior change — explicitly none; read-only consumer. **Still
+  true after the amendment**, and still spy-verified.
 - Keeping the screen on outside timer states (e.g. while browsing tasks) —
   the timer is the reason the tablet is propped up; anything more is a new
-  brief.
+  brief. *(The brief arrived 2026-07-25: "Stay awake on the website" is
+  exactly this, now opt-in and off by default.)*
 - Non-target-browser fallbacks (NoSleep-style). Rejected above.
 
 ## Implementation outline
@@ -143,8 +181,21 @@ subtle part is step 1's explicit-vs-browser release disambiguation.
 - [~] Switch away from the app and back while running: the lock is re-acquired (sentinel active again) without user action. — **[deferred → HUMAN-TODO]** (needs a real tablet; the equivalent policy is unit-tested against a mocked sentinel)
 - [x] With `navigator.wakeLock` absent (init-script delete) and with `request()` rejecting (mock): zero console errors, timer behavior byte-identical.
 - [x] The unit suite covers every case in outline step 3, including the spy proving no timer transition is ever called from the hook.
-- [x] No new UI elements exist; no blob/schema changes were made.
+- [x] No new UI elements exist; no blob/schema changes were made. — **superseded by the 2026-07-25 amendment**; the criteria below replace it.
 - [x] `npm test`, `npm run build`, `npm run build-storybook` green; the ADR 09 absence-tolerance lines are active and green.
+
+### Added by the 2026-07-25 amendment
+
+- [x] Defaults reproduce the shipped policy exactly: `stayAwakeAlways` false, `stayAwakeWhileRunning` true, and a `glu:v2` blob written before the fields existed rehydrates onto them with the rest of the blob untouched (no version bump).
+- [x] "Stay awake on the website" on: the lock is held in `idle`, through every status change, and past any grace expiry — one sentinel throughout, never re-requested on a status change.
+- [x] "Stay awake when the timer is running" off: a full run (running → paused → finished) requests nothing at all, and switching it off mid-run releases the sentinel immediately.
+- [x] The grace deadline is preference-independent: opting in two minutes into an unheld grace acquires, and releases on the *original* deadline rather than a fresh five minutes.
+- [x] "On the website" outranks an opted-out run policy (the pair needs no reconciliation rule).
+- [x] Still a read-only consumer — the transition spy is green across the new modes; no timer field is written by either toggle.
+
+### Deferred to HUMAN-TODO by the amendment
+
+- [~] On a real tablet: with "Stay awake on the website" on and no timer running, the screen stays on past the OS sleep timeout; turning it off lets the screen sleep on the OS schedule. — **[deferred → HUMAN-TODO]** (same reason as the criteria above: needs a real tablet and a real sentinel)
 
 ## Consequences
 

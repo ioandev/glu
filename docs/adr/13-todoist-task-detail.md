@@ -57,7 +57,7 @@ apply (ADR 09 E2E block; ADR 08 palette rule for any new chrome; the ADR
   this is content. No z-index engineering; if real usage ever finds the
   double-drawer awkward, that's a UX amendment, not a launch blocker.
 - **The timer never notices** — standing rule: overlays render beside the
-  timer tree; the 50 ms tick and hotkeys (ADR 06) keep working with the
+  timer tree; the display tick and hotkeys (ADR 06) keep working with the
   detail open.
 
 ### Content

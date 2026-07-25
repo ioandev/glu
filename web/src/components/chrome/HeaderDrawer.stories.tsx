@@ -49,17 +49,44 @@ export const Open: Story = {
     const dialog = await body.findByRole("dialog");
     const panel = within(dialog);
 
-    // Exactly three entries.
+    // Four action rows (ADR 29 added Docs), plus ADR 26's legal footer below.
     const github = panel.getByRole("link", { name: /GitHub/ });
     await expect(github).toHaveAttribute("href", GITHUB_URL);
     await expect(github).toHaveAttribute("target", "_blank");
     await expect(github).toHaveAttribute("rel", "noopener noreferrer");
 
     await expect(panel.getByText("Appearance")).toBeVisible();
+    await expect(panel.getByText("Docs")).toBeVisible();
     await expect(panel.getByText("Settings")).toBeVisible();
 
-    for (const row of [github, panel.getByText("Appearance").closest("button")!]) {
+    for (const row of [
+      github,
+      panel.getByText("Appearance").closest("button")!,
+      panel.getByText("Docs").closest("button")!,
+      panel.getByText("Settings").closest("button")!,
+    ]) {
       await expect(row.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+
+    // Docs is an action row, not a legal-footer link: it opens an overlay, so a
+    // footer where one link opens a tab and its neighbour opens a modal would
+    // teach nothing (ADR 29).
+    await expect(panel.queryByRole("link", { name: "Docs" })).toBeNull();
+
+    // ADR 26: references, in their own nav, opening in a new tab. The hrefs are
+    // unprefixed here because Storybook does not run `next.config.ts` — the
+    // basePath is applied by the build, so `/glu/…` is asserted in the ADR 09
+    // E2E block, which is the only place that can see it.
+    const legal = within(within(dialog).getByRole("navigation", { name: "Legal" }));
+    for (const [name, href] of [
+      ["Privacy Policy", "/privacy"],
+      ["Terms of Service", "/terms"],
+    ] as const) {
+      const link = legal.getByRole("link", { name });
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      await expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     }
   },
 };
@@ -85,6 +112,51 @@ export const SettingsModalOpen: Story = {
 
     await userEvent.keyboard("{Escape}");
     await expect(body.queryByRole("button", { name: "Close settings" })).toBeNull();
+  },
+};
+
+/**
+ * ADR 29: the Docs row opens the manual as a modal. The body arrives through
+ * `next/dynamic`, so every query here is a `findBy*` — asserting synchronously
+ * would be testing the loading state.
+ *
+ * Tablet only, matching the Settings-modal story above. A **full-screen** modal
+ * over the open drawer puts two Mantine headers in the document, which axe reads
+ * as two `banner` landmarks — pre-existing (Settings does exactly this below
+ * 48em today; it simply has no phone story) and out of this ADR's scope. It is
+ * recorded as a deviation in ADR 29 rather than hidden behind a story that
+ * asserts around it.
+ */
+export const DocsModalOpen: Story = {
+  globals: { viewport: { value: "tablet" } },
+  play: async ({ canvasElement }) => {
+    const body = await openDrawer(canvasElement);
+    const drawer = await body.findByRole("dialog");
+    await userEvent.click(within(drawer).getByText("Docs"));
+
+    await expect(await body.findByTestId("docs-modal-body")).toBeVisible();
+    await expect(await body.findByRole("heading", { name: /The timer/ })).toBeVisible();
+    await expect(
+      await body.findByRole("heading", { name: /Todoist \(optional\)/ }),
+    ).toBeVisible();
+
+    // The brief's closing navigation, and the reason it opens a new tab: the app
+    // behind this overlay has a wake lock, a primed audio context and possibly a
+    // running timer, and none of them survive a navigation.
+    const nav = within(await body.findByRole("navigation", { name: "Docs navigation" }));
+    for (const name of ["Privacy Policy", "Terms of Service"] as const) {
+      const link = nav.getByRole("link", { name });
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      await expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+    await expect(nav.getByRole("link", { name: "Open as a page" })).toHaveAttribute(
+      "href",
+      "/docs",
+    );
+
+    await userEvent.keyboard("{Escape}");
+    await expect(body.queryByRole("button", { name: "Close docs" })).toBeNull();
   },
 };
 

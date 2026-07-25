@@ -8,14 +8,39 @@
   min-height: 0;
 }
 
+/* ADR 08 amendment (2026-07-25): below `sm` there are no chevrons at all — the
+   clock is the whole first viewport and the swipe is the only flip, which is
+   what the one-time hint exists to say. Above `sm` they stay, at 10% opacity:
+   present enough to be found, quiet enough not to compete with the clock. */
 .chevron {
-  /* Always visible but visually quiet, and never below the touch floor. */
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  flex: none;
-  color: var(--glu-muted);
-  border-radius: var(--glu-control-radius);
+  display: none;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .chevron {
+    /* Never below the touch floor, even when nearly invisible. */
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    flex: none;
+    color: var(--glu-muted);
+    border-radius: var(--glu-control-radius);
+    opacity: 0.1;
+    transition: opacity 140ms ease;
+  }
+
+  /* A control the keyboard can reach has to be one the eye can find. */
+  .chevron:hover,
+  .chevron:focus-visible {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
+  }
 }
 
 .slot {
@@ -23,7 +48,6 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  max-width: 520px;
   /* Horizontal drags are ours; vertical scrolling stays the browser's, which is
      what keeps a page scroll on mobile from flipping a clock (ADR 08). */
   touch-action: pan-y;
@@ -35,6 +59,14 @@
   overflow: clip;
 }
 
+@media (min-width: $mantine-breakpoint-sm) {
+  .slot {
+    /* Back to a card in the timer half: the cap stops one clock stretching
+       across the whole left column. */
+    max-width: 520px;
+  }
+}
+
 /* One flip mounts two of these for 420 ms and no longer (ADR 25). `inset: 0`
    is load-bearing: ADR 07's `.frame` is `container-type: size`, and every
    `cqmin` in all 18 designs collapses without a definite box to resolve. */
@@ -42,6 +74,18 @@
   position: absolute;
   inset: 0;
   display: flex;
+}
+
+/* Below `sm` the clock runs edge-to-edge, and a full-bleed viewport has no
+   corners to round — the chrome's card radius comes back with the card. */
+.layer > * {
+  border-radius: 0;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .layer > * {
+    border-radius: var(--glu-radius-card);
+  }
 }
 
 .layer[data-animate] {

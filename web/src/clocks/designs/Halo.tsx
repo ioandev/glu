@@ -27,14 +27,14 @@ const R = 110;
 const CIRCUMFERENCE = 2 * Math.PI * R;
 
 export function Halo({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
   // The arc shows what is LEFT — the mockup driver's `progress` was elapsed.
   const offset = CIRCUMFERENCE * (1 - p.remainingFraction);
   const dots = Math.min(session, 8);

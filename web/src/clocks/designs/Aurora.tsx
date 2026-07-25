@@ -23,10 +23,15 @@ export const auroraTheme: ClockTheme = {
   },
 };
 
-export function Aurora({ remainingSeconds, totalSeconds, state, accent }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+export function Aurora({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const p = clockProgress(remainingMs, totalMs);
   // The glow tracks the run: two fixed-size pre-blurred layers, not
   // viewport-sized filters — those are GPU-expensive on a tablet (ADR 07).
+  // The drift is applied as a `transform`, not as `left`/`right`: now that it
+  // moves every frame, an offset change would re-rasterize a 9cqmin blur each
+  // time, where a transform only moves the layer the compositor already has.
+  // `cqw` is 1% of the same container the percentages resolved against, so the
+  // geometry is unchanged.
   const drift = 10 + p.elapsedFraction * 22;
 
   return (
@@ -34,12 +39,12 @@ export function Aurora({ remainingSeconds, totalSeconds, state, accent }: ClockP
       <div
         aria-hidden="true"
         className={designs.glowA}
-        style={{ left: `${drift}%`, top: "18%" }}
+        style={{ left: 0, top: "18%", transform: `translateX(${drift}cqw)` }}
       />
       <div
         aria-hidden="true"
         className={designs.glowB}
-        style={{ right: `${drift}%`, bottom: "16%" }}
+        style={{ right: 0, bottom: "16%", transform: `translateX(${-drift}cqw)` }}
       />
       <div className={classes.center} style={{ position: "relative" }}>
         <span className={`${classes.time} ${designs.bigTime}`} style={{ fontSize: "17cqmin" }}>

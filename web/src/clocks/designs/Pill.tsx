@@ -24,14 +24,16 @@ export const pillTheme: ClockTheme = {
 };
 
 export function Pill({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
+  // The fill is geometry, so it takes the unrounded fraction and slides; the
+  // readout is a number you read, so it stays whole.
   const percent = Math.round(p.elapsedFraction * 100);
 
   return (
@@ -42,7 +44,7 @@ export function Pill({
           {showSession ? ` \u2014 ${session}` : ""}
         </span>
         <div className={designs.pillBar}>
-          <div className={designs.pillFill} style={{ width: `${percent}%` }} />
+          <div className={designs.pillFill} style={{ width: `${p.elapsedFraction * 100}%` }} />
           {/* The mockup blends the readout against a solid ink bar. Dropped for
               the same reason as Tide: the track is a tint of the ink instead, so
               the ink readout is legible across the whole bar at every fill

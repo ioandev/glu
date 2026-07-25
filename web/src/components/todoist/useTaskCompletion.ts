@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { UNDO_GRACE_MS } from "@/store/types";
+import { COMPLETION_UNDO_MS } from "@/store/types";
 
 export interface CompletionUndo {
   taskId: string;
@@ -65,12 +65,12 @@ export function useTaskCompletion(options: {
 
       onCompleted?.(task.id);
       clearTimer();
-      const until = Date.now() + UNDO_GRACE_MS;
+      const until = Date.now() + COMPLETION_UNDO_MS;
       setPending({ taskId: task.id, title: task.title, until });
       timer.current = setTimeout(() => {
         setPending(null);
         // The id stays filtered: the task is genuinely gone from this source.
-      }, UNDO_GRACE_MS);
+      }, COMPLETION_UNDO_MS);
     },
     [onCompleted, onDisplaceOther],
   );

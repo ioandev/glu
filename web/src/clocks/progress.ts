@@ -1,7 +1,7 @@
-import { formatMmSs } from "@/lib/time";
+import { formatMmSs, remainingSeconds, SECOND, MINUTE } from "@/lib/time";
 
 export interface ClockProgress {
-  /** 0 → nothing elapsed, 1 → the run is over. */
+  /** 0 → nothing elapsed, 1 → the run is over. Continuous, not per-second. */
   elapsedFraction: number;
   /** 1 → the full duration is still ahead, 0 → none is. */
   remainingFraction: number;
@@ -9,6 +9,10 @@ export interface ClockProgress {
   time: string;
   minutes: string;
   seconds: string;
+  /** The whole seconds the digits show — ceiling-rounded, for discrete units. */
+  remainingSeconds: number;
+  /** Whole seconds of the run's total. */
+  totalSeconds: number;
   /** Whole minutes of the run's total, clamped to a sane unit count. */
   totalMinutes: number;
 }
@@ -17,12 +21,17 @@ export interface ClockProgress {
  * Fill direction is decided **once, here**. The design-canvas driver treats its
  * `progress` prop as *elapsed*; GLU's source of truth is *remaining*, and 18
  * hand-rolled inversions is how off-by-one-direction bugs ship (ADR 07).
+ *
+ * The split of resolutions is decided here too (amended 2026-07-25): the
+ * fractions are continuous in milliseconds so geometry moves every frame, the
+ * digits stay on ADR 02's ceiling-rounded whole second so they read as a clock.
+ * A design that wants discrete units counts them off `remainingSeconds`.
  */
-export function clockProgress(remainingSeconds: number, totalSeconds: number): ClockProgress {
-  const total = Math.max(1, Math.round(totalSeconds));
-  const remaining = Math.min(total, Math.max(0, Math.round(remainingSeconds)));
+export function clockProgress(remainingMs: number, totalMs: number): ClockProgress {
+  const total = Math.max(1, totalMs);
+  const remaining = Math.min(total, Math.max(0, remainingMs));
   const remainingFraction = remaining / total;
-  const time = formatMmSs(remaining);
+  const time = formatMmSs(remainingSeconds(remaining));
   const [minutes, seconds] = time.split(":");
   return {
     elapsedFraction: 1 - remainingFraction,
@@ -30,7 +39,9 @@ export function clockProgress(remainingSeconds: number, totalSeconds: number): C
     time,
     minutes,
     seconds,
-    totalMinutes: Math.max(1, Math.round(total / 60)),
+    remainingSeconds: remainingSeconds(remaining),
+    totalSeconds: Math.round(total / SECOND),
+    totalMinutes: Math.max(1, Math.round(total / MINUTE)),
   };
 }
 

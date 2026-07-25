@@ -34,6 +34,20 @@
   static shell and its `s-maxage` are gone. GLU is one client-rendered page of
   a few KB — the right side of that trade.
 
+  Second consequence, found in dev on 2026-07-25: a **header-delivered** CSP
+  triggers the HTML spec's nonce hiding — on insertion the browser blanks the
+  `nonce` content attribute and keeps the value in the element's `.nonce`
+  property, so no stylesheet can read a nonce back out through an attribute
+  selector. React hydration compares attributes, so every nonced app-owned tag
+  reported an attribute mismatch on load. The three (ADR 01's
+  `ColorSchemeScript`, ADR 15's `<style>` and `<script>`) now carry
+  `suppressHydrationWarning`. Nothing was broken — those scripts run at parse
+  time, before React exists, and React never patches attribute mismatches — but
+  the warning is permanent, since the hiding is the behaviour we want. **Do not
+  "fix" it by dropping the nonce or moving the CSP to a `<meta>` tag**: the
+  first blocks the script, the second is how the mismatch disappears *and* the
+  nonce becomes readable again.
+
   Two smaller audit fixes land here too: `poweredByHeader: false` (Caddy
   stripped `Server` but nothing stripped Next's `X-Powered-By`, F-8), and
   `images: { unoptimized: true }` + a trace exclusion, because Next shipped
@@ -149,6 +163,18 @@
   (`node:24-alpine`, no native addons) and doubling every PR to catch an
   arm64-only break is the wrong trade. The accepted risk is that such a break
   surfaces at publish instead of at review, where `merge` still refuses to tag.
+
+- Amended: 2026-07-25c — **`script-src` gains `'unsafe-eval'` under
+  `next dev`, and only there.** The nonce CSP above is correct in production
+  and unbuildable-around in development: `next dev` compiles React and the HMR
+  client with `eval()`, so the policy that makes the deployed page safe makes
+  the dev page log `eval() is not supported in this environment`. The
+  relaxation is a build-time constant in `web/src/proxy.ts` gated on
+  `NODE_ENV === "development"`, which is `production` in every artefact `next
+  build` produces and is restated by `web/Dockerfile`. `'unsafe-inline'` is
+  *not* granted in either mode — the nonce exists so it never has to be. An
+  audit reading a **production** `script-src` should still see exactly
+  `'self' 'nonce-…' 'strict-dynamic'`.
 
 - Deviation (2026-07-24, implementation): Phase B was written as *files only* —
   `publish.yml` ships with its `push: [main]` trigger commented out, and no

@@ -123,7 +123,7 @@ services:
   api:
     image: ghcr.io/ioandev/glu-api:${GLU_TAG:-edge} # same GLU_TAG pin as web
     restart: unless-stopped
-    env_file: .env # TODOIST_CLIENT_ID / _SECRET, SESSION_SECRET, PUBLIC_ORIGIN
+    env_file: .env # TODOIST_CLIENT_ID / _SECRET / _VERIFICATION_TOKEN, SESSION_SECRET, PUBLIC_ORIGIN
     environment:
       # The Dockerfile already sets this; restating it here means an error
       # response can never regress into Express's stack-trace HTML because

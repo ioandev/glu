@@ -29,6 +29,31 @@ export const TapSetsTheTimer: Story = {
   },
 };
 
+/**
+ * ADR 32: ± off the ladder grows an eighth rung, in sorted position, pressed —
+ * and tapping a preset takes it away again.
+ */
+export const CustomDuration: Story = {
+  decorators: [
+    withStoreState({
+      selectedDuration: 3 * MINUTE,
+      total: 3 * MINUTE,
+      remaining: 3 * MINUTE,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const custom = canvas.getByRole("button", { name: "3m" });
+    await expect(custom).toHaveAttribute("aria-pressed", "true");
+    await expect(custom).toHaveAttribute("data-custom", "true");
+    // Sorted, not appended: the row reads as a ladder of lengths.
+    await expect(canvas.getAllByRole("button")[0]).toHaveTextContent("3m");
+
+    await userEvent.click(canvas.getByRole("button", { name: "15m" }));
+    await expect(canvas.queryByRole("button", { name: "3m" })).toBeNull();
+  },
+};
+
 export const TapWhileRunningPreservesRunState: Story = {
   decorators: [
     withStoreState({

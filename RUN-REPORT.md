@@ -58,7 +58,7 @@ split the repo and moved them behind `just` (`tsconfig.server.json` became
 - **01 — Next.js + Mantine setup.** Next 16 + Mantine 9.4 + Tailwind v4 utility
   layer (no preflight, layered), `basePath: '/glu'`, SSR-safe `auto` scheme,
   favicon from `img/favicon.svg` with a dark-scheme ink swap.
-- **02 — UI / timer engine.** Timestamp-based countdown (50 ms display tick),
+- **02 — UI / timer engine.** Timestamp-based countdown (per-frame display tick),
   Zustand store with `persist` over a versioned `glu:vN` blob, preset/±
   semantics, environment toggles with the Silence rule, two-breakpoint layout,
   restore paths (running / paused / expired-while-away).
@@ -112,7 +112,8 @@ split the repo and moved them behind `just` (`tsconfig.server.json` became
 - **20 — Task actions.** `close`/`reopen` verbs, optimistic complete + undo-by-
   reopen, one `TaskCircle`, generalised `UndoBar` host, cross-type displacement.
 - **21 — Final-countdown takeover.** Edge-triggered last-60 s overlay in the
-  page background, clock elevated above it, peek, reduced-motion crossfade,
+  page background, clock elevated above it, tap-to-dismiss (per run),
+  reduced-motion crossfade,
   finished persistence, stacking contract (portals > undo bar > takeover).
 
 ## Deviations (all noted in-ADR, in the same session)

@@ -13,8 +13,13 @@
   box-shadow: var(--glu-shadow);
 }
 
+/* Mantine's drawer/modal header is `position: sticky` above a scrolling body, so
+   its background is structural, not decoration: `transparent` let the docs prose
+   (ADR 29) scroll straight through the title. The panel's own token keeps the
+   seam invisible at the top of the scroll and opaque once anything moves under
+   it. */
 .panelHeader {
-  background: transparent;
+  background: var(--glu-surface-strong);
   color: var(--glu-page-fg);
   font-family: var(--glu-heading-family);
   font-weight: var(--glu-heading-weight);
@@ -48,4 +53,25 @@
   color: var(--glu-muted);
   display: inline-flex;
   align-items: center;
+}
+
+/* ADR 26: the legal footer. Visually secondary to the action rows — no
+   surface, no border — but still a tablet touch target. */
+.legal {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: var(--glu-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.legalLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
 }

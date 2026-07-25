@@ -1,0 +1,195 @@
+/* ADR 31. Every value here is a chrome token (ADR 15) — the welcome restyles
+   with the direction and the scheme like everything else, and a literal colour
+   would be a review defect on the one page a stranger sees first.
+
+   Deliberately *not* an extension of `legal.module.css`: that file is the prose
+   treatment shared by Privacy, Terms and the manual (ADR 26), so a hero rule
+   added there would restyle all three. This is a different kind of page and it
+   owns its own sheet.
+
+   Also deliberately absent: any `overflow` or `height` cap. The `100dvh`
+   no-scroll contract belongs to `AppShell.module.css`'s `.shell`; the welcome
+   is not the shell, so it scrolls at every width — which is what a pitch on a
+   590 px screen has to do. */
+
+.page {
+  min-height: 100dvh;
+  background: var(--glu-page-bg);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-font-sans), system-ui, sans-serif;
+  padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px) 96px;
+}
+
+.column {
+  /* Wider than the 72ch prose column: this page carries a two-up card grid,
+     which needs the room the documents do not. */
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: clamp(24px, 6vh, 64px) 0 clamp(32px, 6vh, 56px);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.headline {
+  margin: 16px 0 0;
+  max-width: 20ch;
+  font-family: var(--glu-heading-family);
+  font-weight: var(--glu-heading-weight);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.sub {
+  margin: 20px 0 0;
+  max-width: 56ch;
+  color: var(--glu-muted);
+  font-size: clamp(1rem, 2.2vw, 1.125rem);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.ctaRow {
+  margin-top: clamp(28px, 5vh, 40px);
+}
+
+/* The largest touch target on the page, and the only accented one — there is
+   exactly one thing to do here (ADR 31). Comfortably past the 44 px floor. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 0 clamp(28px, 6vw, 44px);
+  border: var(--glu-border-width) solid transparent;
+  border-radius: var(--glu-radius-pill);
+  background: var(--glu-accent);
+  color: var(--glu-on-accent);
+  box-shadow: var(--glu-shadow);
+  font-family: var(--glu-font-sans), system-ui, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1;
+  /* The CTA is a `<button>` on the gate and an `<a>` on the route (see
+     EnterAppButton) — without this the two render differently, and the anchor
+     picks up the UA underline through the middle of a filled pill. */
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease;
+}
+
+.cta:hover {
+  opacity: 0.92;
+}
+
+.cta:active {
+  transform: translateY(1px);
+}
+
+/* The sub-100 ms window before the store has hydrated, when a click is a no-op
+   (see EnterAppButton). Visually inert rather than visually disabled — the
+   button is about to work, and dimming it would only draw the eye to a state
+   nobody is meant to notice. */
+.cta[aria-disabled="true"] {
+  cursor: default;
+}
+
+/* ── Feature cards ───────────────────────────────────────────────────────── */
+
+.features {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature {
+  padding: 20px 22px;
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+}
+
+.featureTitle {
+  margin: 0;
+  font-family: var(--glu-heading-family);
+  font-weight: var(--glu-heading-weight);
+  font-size: 1.0625rem;
+  line-height: 1.3;
+}
+
+.featureBody {
+  margin: 10px 0 0;
+  color: var(--glu-muted);
+  line-height: 1.65;
+}
+
+/* ── Footnote and footer ─────────────────────────────────────────────────── */
+
+.footnote {
+  margin: 28px 0 0;
+  color: var(--glu-muted);
+  text-align: center;
+  line-height: 1.65;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: var(--glu-border);
+}
+
+/* ≥44 px in both directions, the way the document footers are (ADR 26) — these
+   are read on the same tablet, by the same thumb. */
+.footerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  text-decoration: none;
+  border-radius: var(--glu-radius-control);
+}
+
+.footerLink:hover,
+.footerLink:focus-visible {
+  color: var(--glu-page-fg);
+  text-decoration: underline;
+}
+
+/* The tablet canvas (48em, UI.md's breakpoint): the cards go two-up. Below it
+   they stack, which is the phone-width reading order anyway. */
+@media (min-width: 48em) {
+  .features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}

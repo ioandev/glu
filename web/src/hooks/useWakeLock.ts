@@ -16,17 +16,38 @@ type WakeLockNavigator = Navigator & {
   wakeLock: { request: (type: "screen") => Promise<MinimalSentinel> };
 };
 
+/** The two user-owned wake-lock preferences (ADR 17 amendment, ADR 19 rows). */
+export interface WakeLockPreferences {
+  /** Hold the lock for as long as the app is open, whatever the timer does. */
+  always: boolean;
+  /** Hold it while `running`, plus the grace through `paused`/`finished`. */
+  whileRunning: boolean;
+}
+
+/** What the hook did before either preference existed — still the defaults. */
+export const DEFAULT_WAKE_LOCK_PREFERENCES: WakeLockPreferences = {
+  always: false,
+  whileRunning: true,
+};
+
 /**
  * Holds a screen wake lock while a run is on the clock.
  *
  * Policy (ADR 17): held while `running`; held through `paused` and `finished`
  * for a five-minute grace — those are "the user is probably still here, the
  * glanceable state matters" moments — and released immediately on `idle`.
+ * Two preferences sit on top (ADR 17 amendment): `whileRunning` opts out of
+ * that policy entirely, and `always` overrides it upward — the screen stays
+ * lit for as long as the app is open, `idle` included. `always` subsumes
+ * `whileRunning` by construction; nothing has to reconcile them.
  *
  * The grace is a **deadline timestamp, not a bare timeout**: the browser
  * auto-releases the lock whenever the page is hidden, so on the way back to
  * visible the hook re-evaluates *policy* and re-acquires only if the policy
- * still wants the lock. A timeout-based grace dies with the hidden tab.
+ * still wants the lock. A timeout-based grace dies with the hidden tab. The
+ * deadline is a fact about the run's timeline, so it is kept regardless of the
+ * preferences and only *consulted* through them — flipping `whileRunning` back
+ * on mid-grace resumes the hold for whatever is left of it.
  *
  * This hook is a **read-only consumer of timer status**: it never transitions
  * the state machine, never touches `runId` or `ranMs` (ADR 14's mandatory
@@ -34,7 +55,13 @@ type WakeLockNavigator = Navigator & {
  * timestamp engine already survives the screen sleeping, so correctness never
  * depended on the lock.
  */
-export function useWakeLock(status: TimerStatus) {
+export function useWakeLock(
+  status: TimerStatus,
+  preferences: WakeLockPreferences = DEFAULT_WAKE_LOCK_PREFERENCES,
+) {
+  // Destructured, so the effect depends on the two booleans rather than on the
+  // identity of a caller's object literal.
+  const { always, whileRunning } = preferences;
   const visibility = useDocumentVisibility();
   const sentinel = useRef<MinimalSentinel | null>(null);
   /** Epoch ms the grace expires; `null` when no grace is running. */
@@ -47,8 +74,11 @@ export function useWakeLock(status: TimerStatus) {
   useEffect(() => {
     const supported = typeof navigator !== "undefined" && "wakeLock" in navigator;
 
-    const wantsLock = () =>
-      status === "running" || (deadline.current !== null && Date.now() < deadline.current);
+    const wantsLock = () => {
+      if (always) return true;
+      if (!whileRunning) return false;
+      return status === "running" || (deadline.current !== null && Date.now() < deadline.current);
+    };
 
     const release = () => {
       const current = sentinel.current;
@@ -114,7 +144,7 @@ export function useWakeLock(status: TimerStatus) {
         Math.max(0, deadline.current - Date.now()),
       );
     }
-  }, [status, visibility]);
+  }, [status, visibility, always, whileRunning]);
 
   // Release on unmount so a navigation cannot leave the screen pinned.
   useEffect(

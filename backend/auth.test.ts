@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { sealData } from "iron-session";
@@ -126,6 +127,88 @@ describe("GET /auth/todoist/callback (ADR 11)", () => {
 
     expect(response.status).toBe(502);
     expect(cookieValue(response.headers["set-cookie"], SESSION_COOKIE)).toBeUndefined();
+  });
+});
+
+describe("the App Console verification token (ADR 11 amendment)", () => {
+  const VERIFICATION_TOKEN = "test-verification-token";
+
+  const verifiedConfig: ServerConfig = readConfig({
+    TODOIST_CLIENT_ID: "test-client-id",
+    TODOIST_CLIENT_SECRET: "test-client-secret",
+    TODOIST_VERIFICATION_TOKEN: VERIFICATION_TOKEN,
+    SESSION_SECRET: "test-session-secret-that-is-long-enough-32",
+    PUBLIC_ORIGIN: "http://localhost:3000",
+  } as unknown as NodeJS.ProcessEnv);
+
+  const verifiedApp = () => createApp(verifiedConfig);
+
+  /** Signed from scratch here, so the suite can't rubber-stamp `session.ts`. */
+  const sign = (nonce: string) =>
+    createHmac("sha256", VERIFICATION_TOKEN).update(nonce).digest("base64url");
+
+  const callback = (state: string) =>
+    request(verifiedApp())
+      .get(`/glu/api/auth/todoist/callback?code=abc&state=${encodeURIComponent(state)}`)
+      .set("Cookie", [`${STATE_COOKIE}=${state}`]);
+
+  it("signs the state with the token and keeps the token out of the URL", async () => {
+    const response = await request(verifiedApp()).get("/glu/api/auth/todoist/login");
+
+    const state = new URL(response.headers.location).searchParams.get("state")!;
+    const [nonce, signature] = state.split(".");
+    expect(signature).toBe(sign(nonce));
+
+    // The token is a static per-app secret: a URL is the one place it must
+    // never appear, since it survives in history, referrers and access logs.
+    expect(response.headers.location).not.toContain(VERIFICATION_TOKEN);
+    expect(cookieValue(response.headers["set-cookie"], STATE_COOKIE)).toContain(
+      `${STATE_COOKIE}=${state}`,
+    );
+  });
+
+  it("mints a fresh nonce per login, so the signature is never a fixed value", async () => {
+    const first = await request(verifiedApp()).get("/glu/api/auth/todoist/login");
+    const second = await request(verifiedApp()).get("/glu/api/auth/todoist/login");
+
+    const stateOf = (r: typeof first) =>
+      new URL(r.headers.location).searchParams.get("state")!;
+    expect(stateOf(first)).not.toBe(stateOf(second));
+  });
+
+  it("completes the callback for a state it minted", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ access_token: "at-v", refresh_token: "rt-v", expires_in: 3600 }),
+    );
+
+    const response = await callback(`nonce-1.${sign("nonce-1")}`);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("http://localhost:3000/glu");
+    expect(cookieValue(response.headers["set-cookie"], SESSION_COOKIE)).toBeDefined();
+  });
+
+  it("rejects a forged signature even when the state cookie matches", async () => {
+    const response = await callback(`nonce-1.${sign("some-other-nonce")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "state_unverified" });
+    expect(cookieValue(response.headers["set-cookie"], SESSION_COOKIE)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsigned state even when the state cookie matches", async () => {
+    const response = await callback("bare-nonce");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "state_unverified" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the state a bare nonce when no token is configured", async () => {
+    const response = await request(app()).get("/glu/api/auth/todoist/login");
+    const state = new URL(response.headers.location).searchParams.get("state")!;
+    expect(state).not.toContain(".");
   });
 });
 

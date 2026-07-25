@@ -54,3 +54,6 @@ blob-report/
 
 # backend build output (backend/dist)
 dist/
+
+# scratch commit message written by the /commit command
+COMMIT.md

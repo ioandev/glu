@@ -42,7 +42,7 @@ export function ClockGallery() {
   const showSessionOnClock = useGluStore((s) => s.showSessionOnClock);
   const session = useGluStore((s) => s.day.sessions.length);
   const runId = useGluStore((s) => s.runId);
-  const { seconds, totalMs, status } = useCountdown();
+  const { remainingMs, seconds, totalMs, status } = useCountdown();
 
   const clock = resolveClock(activeClockId);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -70,8 +70,10 @@ export function ClockGallery() {
         data-animate={flipSeq > 0 ? "" : undefined}
       >
         <Clock
-          remainingSeconds={seconds}
-          totalSeconds={Math.round(totalMs / 1000)}
+          // Milliseconds, so the geometry moves every frame; the takeover below
+          // still reads the ceiling-rounded second the digits show (ADR 21).
+          remainingMs={remainingMs}
+          totalMs={totalMs}
           session={session}
           showSession={showSessionOnClock}
           state={status}
@@ -117,7 +119,19 @@ export function ClockGallery() {
           start.current = null;
           if (!from) return;
           const step = swipeIntent(event.clientX - from.x, event.clientY - from.y);
-          if (step !== 0) flip(step);
+          if (step !== 0) {
+            flip(step);
+            return;
+          }
+          // ADR 21 amendment (2026-07-25): the clock rides *above* the overlay,
+          // and below `sm` it is the entire first viewport (ADR 08) — so on a
+          // phone the overlay has no exposed pixel left to press, and the "tap
+          // anywhere" ADR 21 promises has to be honoured here or the takeover
+          // cannot be dismissed at all. A press that resolved to no swipe is
+          // that tap: it dissolves the takeover for the rest of the run,
+          // running or finished. A swipe stays a flip — browsing clocks on the
+          // distraction-free screen is not a request to end it.
+          if (takeover.covered) takeover.onOverlayPress();
         }}
         onPointerCancel={() => {
           start.current = null;

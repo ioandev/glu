@@ -10,6 +10,10 @@ export function withStoreState(patch: Partial<GluPersistedState> = {}): Decorato
   return function StoreDecorator(Story) {
     // Runs during render, before the story's children read the store.
     React.useState(() => {
+      // Stories share one browser origin, so a blob left by an earlier story
+      // would come back through the shell's rehydrate-on-mount and quietly
+      // overwrite this patch. Clear first: the patch is the whole story state.
+      window.localStorage.clear();
       useGluStore.setState({ ...initialPersistedState(), ...patch });
       return true;
     });

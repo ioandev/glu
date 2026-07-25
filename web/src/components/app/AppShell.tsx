@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import { ClockGallery } from "@/components/clock/ClockGallery";
 import { EnvironmentToggles } from "@/components/environment/EnvironmentToggles";
 import { HeaderDrawer } from "@/components/chrome/HeaderDrawer";
+import { ScrollHint } from "@/components/chrome/ScrollHint";
+import { SwipeHint } from "@/components/chrome/SwipeHint";
 import { PresetRow } from "@/components/timer/PresetRow";
 import { TodoistPanel } from "@/components/todoist/TodoistPanel";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -23,7 +25,10 @@ export function AppShell() {
   useTimerHotkeys();
   // Read-only consumer of timer status: it never transitions the machine (ADR 17).
   const status = useGluStore((s) => s.status);
-  useWakeLock(status);
+  useWakeLock(status, {
+    always: useGluStore((s) => s.stayAwakeAlways),
+    whileRunning: useGluStore((s) => s.stayAwakeWhileRunning),
+  });
   useSessionAlerts(status, useGluStore((s) => s.total));
 
   // One status fetch for the whole app; every Todoist surface observes the
@@ -42,7 +47,15 @@ export function AppShell() {
       <section className={classes.timerArea} aria-label="Timer">
         {/* DOM order is the phone order — the clock owns the first viewport.
             At/above `sm` the preset row is re-ordered above the clock in CSS. */}
-        <div className={classes.clockSlot}>{hydrated ? <ClockGallery /> : null}</div>
+        <div className={classes.clockSlot}>
+          {hydrated ? (
+            <>
+              <ClockGallery />
+              <SwipeHint />
+              <ScrollHint />
+            </>
+          ) : null}
+        </div>
         <div className={classes.presets}>{hydrated ? <PresetRow /> : null}</div>
         <div className={classes.controls}>{hydrated ? <TimerPanel /> : null}</div>
       </section>

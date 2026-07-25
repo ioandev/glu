@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { CLOCKS, CLOCK_BY_ID, DEFAULT_CLOCK_ID, resolveClock } from "./registry";
 import { CLOCK_THEME_BY_ID, EXTREME_PALETTE_IDS } from "./themes";
 import { clockProgress, unitCount } from "./progress";
-import { formatMmSs } from "@/lib/time";
+import { formatMmSs, MINUTE, SECOND } from "@/lib/time";
 import type { ClockProps } from "./types";
 
 const baseProps: ClockProps = {
-  remainingSeconds: 750,
-  totalSeconds: 1500,
+  remainingMs: 750 * SECOND,
+  totalMs: 1500 * SECOND,
   session: 3,
   showSession: true,
   state: "running",
@@ -70,17 +70,29 @@ describe("clock registry (ADR 07)", () => {
 
 describe("clockProgress (ADR 07)", () => {
   it("derives remaining and elapsed fractions once, clamped", () => {
-    expect(clockProgress(750, 1500).remainingFraction).toBe(0.5);
-    expect(clockProgress(750, 1500).elapsedFraction).toBe(0.5);
-    expect(clockProgress(0, 1500).remainingFraction).toBe(0);
-    expect(clockProgress(9999, 1500).remainingFraction).toBe(1);
-    expect(clockProgress(-5, 1500).remainingFraction).toBe(0);
+    expect(clockProgress(750 * SECOND, 1500 * SECOND).remainingFraction).toBe(0.5);
+    expect(clockProgress(750 * SECOND, 1500 * SECOND).elapsedFraction).toBe(0.5);
+    expect(clockProgress(0, 1500 * SECOND).remainingFraction).toBe(0);
+    expect(clockProgress(9999 * SECOND, 1500 * SECOND).remainingFraction).toBe(1);
+    expect(clockProgress(-5 * SECOND, 1500 * SECOND).remainingFraction).toBe(0);
   });
 
   it("uses ADR 02's formatter, ceiling and all", () => {
-    expect(clockProgress(1500, 1500).time).toBe(formatMmSs(1500));
-    expect(clockProgress(1500, 1500).minutes).toBe("25");
-    expect(clockProgress(1500, 1500).seconds).toBe("00");
+    expect(clockProgress(1500 * SECOND, 1500 * SECOND).time).toBe(formatMmSs(1500));
+    expect(clockProgress(1500 * SECOND, 1500 * SECOND).minutes).toBe("25");
+    expect(clockProgress(1500 * SECOND, 1500 * SECOND).seconds).toBe("00");
+    // Ceiling, so a part-second still reads as the second it is inside.
+    expect(clockProgress(1499.4 * SECOND, 1500 * SECOND).time).toBe("25:00");
+  });
+
+  /** The reason the props carry milliseconds at all (amended 2026-07-25). */
+  it("moves the fractions within a single second, and the digits not at all", () => {
+    const total = 20 * MINUTE;
+    const a = clockProgress(10 * MINUTE, total);
+    const b = clockProgress(10 * MINUTE - 16, total);
+    expect(b.elapsedFraction).toBeGreaterThan(a.elapsedFraction);
+    expect(b.time).toBe(a.time);
+    expect(b.remainingSeconds).toBe(a.remainingSeconds);
   });
 
   it("derives unit counts from the total — a 5-minute run is not 25 dots", () => {
@@ -92,15 +104,17 @@ describe("clockProgress (ADR 07)", () => {
 });
 
 describe("every clock renders (ADR 07)", () => {
-  const totals = [300, 1500, 3600, 5940];
+  const totals = [300 * SECOND, 1500 * SECOND, 3600 * SECOND, 5940 * SECOND];
 
   it("across the remaining × total matrix without throwing", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
       for (const total of totals) {
-        for (const remaining of [0, 1, Math.floor(total / 2), total]) {
+        // The half-second offsets are the new resolution: a clock must not
+        // throw — or divide by a rounded-away zero — mid-second.
+        for (const remaining of [0, 1, 500, Math.floor(total / 2) + 499, total]) {
           expect(() =>
-            render(<Component {...baseProps} remainingSeconds={remaining} totalSeconds={total} />),
+            render(<Component {...baseProps} remainingMs={remaining} totalMs={total} />),
           ).not.toThrow();
           cleanup();
         }
@@ -112,7 +126,7 @@ describe("every clock renders (ADR 07)", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
       const { container } = render(
-        <Component {...baseProps} remainingSeconds={754} totalSeconds={1500} />,
+        <Component {...baseProps} remainingMs={754 * SECOND} totalMs={1500 * SECOND} />,
       );
       // Broadside and Field split mm and ss onto separate lines.
       const text = container.textContent ?? "";
@@ -145,10 +159,10 @@ describe("every clock renders (ADR 07)", () => {
     }
   });
 
-  it("Terminal shows `--focus Nm` from totalSeconds", () => {
+  it("Terminal shows `--focus Nm` from the run's total", () => {
     const Terminal = CLOCK_BY_ID.terminal.component;
     const { getByTestId } = render(
-      <Terminal {...baseProps} totalSeconds={45 * 60} remainingSeconds={100} />,
+      <Terminal {...baseProps} totalMs={45 * MINUTE} remainingMs={100 * SECOND} />,
     );
     expect(getByTestId("clock-total").textContent).toContain("--focus 45m");
   });
@@ -168,11 +182,11 @@ describe("every clock renders (ADR 07)", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
       for (const [remaining, total] of [
-        [99 * 60 + 59, 99 * 60 + 59],
-        [0, 99 * 60 + 59],
+        [(99 * 60 + 59) * SECOND, (99 * 60 + 59) * SECOND],
+        [0, (99 * 60 + 59) * SECOND],
       ]) {
         const { container } = render(
-          <Component {...baseProps} remainingSeconds={remaining} totalSeconds={total} />,
+          <Component {...baseProps} remainingMs={remaining} totalMs={total} />,
         );
         expect(container.firstElementChild).toBeTruthy();
         cleanup();

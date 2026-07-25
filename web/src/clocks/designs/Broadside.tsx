@@ -24,14 +24,14 @@ export const broadsideTheme: ClockTheme = {
 };
 
 export function Broadside({
-  remainingSeconds,
-  totalSeconds,
+  remainingMs,
+  totalMs,
   session,
   showSession,
   state,
   accent,
 }: ClockProps) {
-  const p = clockProgress(remainingSeconds, totalSeconds);
+  const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={broadsideTheme} accent={accent} state={state}>
