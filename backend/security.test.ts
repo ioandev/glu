@@ -112,7 +112,15 @@ describe("rate limiting (F-3, ADR 24)", () => {
   it("meters unrouted probes, which still cost the body parser", async () => {
     const server = app();
     let sawLimit = false;
-    for (let i = 0; i <= API_LIMIT.capacity; i += 1) {
+    // The floor refills in real time while this loop runs, and API_LIMIT is the
+    // one family whose refillPerMinute equals its capacity (300/300 = 5/s). Each
+    // supertest round-trip costs ~1ms, so sending exactly capacity+1 requests
+    // hands ~1.5 tokens back over the ~300ms window — right at the 1-token trip
+    // threshold, making the final 429 depend on machine speed. Send a generous
+    // burst so consumption always outruns refill: the claim under test is that
+    // unrouted 404s are metered *at all*, not the exact trip count. A regression
+    // that stopped metering them would 404 forever and still fail here.
+    for (let i = 0; i < API_LIMIT.capacity * 2; i += 1) {
       const res = await request(server).get(`/glu/api/nope-${i}`);
       if (res.status === 429) {
         sawLimit = true;
