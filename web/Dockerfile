@@ -18,18 +18,21 @@ RUN npm run build
 
 FROM node:24-alpine AS runtime
 WORKDIR /app
-# node:alpine already ships an unprivileged `node` user (uid 1000).
+# Fixed UID/GID 5330 — matches the host deploy perms for glu-web (server-2-perms),
+# so the container process and its files line up with the server user. Replaces
+# node:alpine's default `node` (uid 1000); GLU is stateless and mounts nothing.
+RUN addgroup -g 5330 -S app && adduser -u 5330 -S -G app -h /app -H app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 # `output: 'standalone'` emits a minimal server + node_modules under
 # .next/standalone; static assets and public/ are copied alongside it.
-COPY --from=build --chown=node:node /repo/.next/standalone ./
-COPY --from=build --chown=node:node /repo/.next/static ./.next/static
-COPY --from=build --chown=node:node /repo/public ./public
+COPY --from=build --chown=app:app /repo/.next/standalone ./
+COPY --from=build --chown=app:app /repo/.next/static ./.next/static
+COPY --from=build --chown=app:app /repo/public ./public
 # Attribution ships with the image (ADR 23). This package is its own build
 # context (ADR 22), so the root LICENSE and NOTICE are embedded inside the
 # generated manifest rather than copied as separate files.
-COPY --from=build --chown=node:node /repo/LICENSES ./LICENSES
-USER node
+COPY --from=build --chown=app:app /repo/LICENSES ./LICENSES
+USER app
 EXPOSE 3000
 # basePath means the app answers under /glu — a probe on /healthz 404s silently.
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \

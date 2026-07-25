@@ -24,16 +24,18 @@ RUN npm ci --omit=dev
 
 FROM node:24-alpine AS runtime
 WORKDIR /app
-# node:alpine already ships an unprivileged `node` user (uid 1000).
+# Fixed UID/GID 5331 — matches the host deploy perms for glu-api (server-2-perms).
+# Replaces node:alpine's default `node` (uid 1000); GLU is stateless, mounts nothing.
+RUN addgroup -g 5331 -S app && adduser -u 5331 -S -G app -h /app -H app
 # Secrets (TODOIST_CLIENT_ID/_SECRET, SESSION_SECRET, PUBLIC_ORIGIN) come from
 # the environment at run time — compose's `env_file` — never baked into a layer.
 ENV NODE_ENV=production API_PORT=4000
-COPY --from=deps --chown=node:node /deps/node_modules ./node_modules
-COPY --from=build --chown=node:node /repo/dist ./dist
+COPY --from=deps --chown=app:app /deps/node_modules ./node_modules
+COPY --from=build --chown=app:app /repo/dist ./dist
 # LICENSES carries the attribution AND GLU's own Apache-2.0 text + NOTICE, since
 # this package is its own build context and cannot reach the repo root (ADR 23).
-COPY --chown=node:node package.json LICENSES ./
-USER node
+COPY --chown=app:app package.json LICENSES ./
+USER app
 EXPOSE 4000
 # The router mounts at /glu/api, so the health route is /glu/api/healthz — a
 # probe on a bare /healthz 404s, the same trap the web tier's basePath sets.
