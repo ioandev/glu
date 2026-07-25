@@ -1,0 +1,66 @@
+/* Styled entirely through chrome tokens (ADR 15): if a rule here doesn't change
+   when the chrome switches, and it's shape/material/colour, it's a defect. */
+
+.presetButton,
+.adjustButton {
+  min-height: 44px;
+  min-width: 56px;
+  border-radius: var(--glu-control-radius);
+  border: var(--glu-border);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  font-variant-numeric: tabular-nums;
+}
+
+.presetButton[data-active] {
+  background: var(--glu-accent);
+  border-color: var(--glu-accent);
+  color: var(--glu-on-accent);
+}
+
+.transportButton {
+  min-height: 56px;
+  min-width: 104px;
+  border-radius: var(--glu-control-radius);
+  font-family: var(--glu-label-family);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.transportButton[data-variant="default"] {
+  border: var(--glu-border);
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+}
+
+.transportButton[data-variant="filled"] {
+  background: var(--glu-accent);
+  color: var(--glu-on-accent);
+  box-shadow: var(--glu-shadow);
+}
+
+.timeText {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-family: var(--glu-heading-family);
+  font-size: clamp(3.5rem, 12vw, 7rem);
+  line-height: 1;
+  font-weight: var(--glu-heading-weight);
+  letter-spacing: -0.02em;
+  color: var(--glu-page-fg);
+}
+
+.timeText[data-finished] {
+  color: var(--glu-accent-text);
+}
+
+.statusLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-family: var(--glu-font-mono);
+  color: var(--glu-muted);
+}

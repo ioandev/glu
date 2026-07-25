@@ -1,0 +1,412 @@
+/* Shared primitives for the 18 designs. Everything sizes in container units so
+   each design holds its layout from a half-screen slot to a full mobile
+   viewport (ADR 07). */
+
+.svgSquare {
+  width: min(78cqw, 78cqh);
+  height: min(78cqw, 78cqh);
+  display: block;
+  overflow: visible;
+}
+
+.svgFill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dotRow {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqmin;
+}
+
+.dotFilled,
+.dotEmpty {
+  display: block;
+  width: 2.4cqmin;
+  height: 2.4cqmin;
+  border-radius: 50%;
+}
+
+.dotFilled {
+  background: var(--clk-accent);
+}
+
+.dotEmpty {
+  border: 0.4cqmin solid var(--clk-accent);
+  box-sizing: border-box;
+}
+
+.squareDot {
+  border-radius: 0;
+}
+
+.bigTime {
+  font-size: 14cqmin;
+  font-weight: 500;
+}
+
+.hugeTime {
+  font-size: 22cqmin;
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.rowBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.colEnd {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1.5cqmin;
+}
+
+.mono {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+}
+
+.display {
+  font-family: var(--glu-font-display), var(--glu-font-sans), sans-serif;
+}
+
+.fillLayer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--clk-accent);
+}
+
+.overlayCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5cqmin;
+}
+
+/* --- Aurora --------------------------------------------------------------- */
+
+.glowA,
+.glowB {
+  position: absolute;
+  width: 62cqmin;
+  height: 62cqmin;
+  border-radius: 50%;
+  pointer-events: none;
+  /* Fixed-size pre-blurred layers: a viewport-sized blur(50px) is GPU-expensive
+     on a tablet (ADR 07). */
+  filter: blur(9cqmin);
+}
+
+.glowA {
+  background: radial-gradient(circle at 35% 35%, var(--clk-accent), transparent 65%);
+}
+
+.glowB {
+  background: radial-gradient(circle at 60% 60%, var(--clk-ink), transparent 68%);
+  opacity: 0.45;
+}
+
+.pillLabel {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 2.8cqmin;
+  color: var(--clk-ink);
+  border: 1px solid var(--clk-muted);
+  border-radius: 999px;
+  padding: 1.4cqmin 4cqmin;
+}
+
+/* --- Stack ---------------------------------------------------------------- */
+
+.slatColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9cqmin;
+  width: 16cqmin;
+  height: 100%;
+}
+
+.slat {
+  flex: 1;
+  border-radius: 0.6cqmin;
+  min-height: 0.6cqmin;
+}
+
+/* --- Eclipse -------------------------------------------------------------- */
+
+.eclipseWrap {
+  position: relative;
+  width: 46cqmin;
+  height: 46cqmin;
+}
+
+.eclipseDisc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--clk-ink);
+  box-shadow: 0 0 14cqmin color-mix(in srgb, var(--clk-ink) 35%, transparent);
+}
+
+.eclipseMoon {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--clk-bg);
+}
+
+/* --- Grid ----------------------------------------------------------------- */
+
+.dotGrid {
+  display: grid;
+  gap: 2.4cqmin;
+}
+
+.gridDot {
+  display: block;
+  width: 5cqmin;
+  height: 5cqmin;
+  border-radius: 50%;
+}
+
+/* --- Terminal ------------------------------------------------------------- */
+
+.termDim {
+  font-size: 3.2cqmin;
+  color: var(--clk-muted);
+}
+
+/* --- Sunset --------------------------------------------------------------- */
+
+.sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    color-mix(in srgb, var(--clk-ink) 82%, var(--clk-bg)),
+    color-mix(in srgb, var(--clk-accent) 45%, var(--clk-ink)),
+    var(--clk-accent)
+  );
+}
+
+.sun {
+  position: absolute;
+  left: calc(50% - 12cqmin);
+  width: 24cqmin;
+  height: 24cqmin;
+  border-radius: 50%;
+  background: var(--clk-bg);
+  box-shadow: 0 0 12cqmin color-mix(in srgb, var(--clk-bg) 55%, transparent);
+}
+
+.ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background: color-mix(in srgb, var(--clk-ink) 88%, black);
+  border-top: 0.4cqmin solid color-mix(in srgb, var(--clk-accent) 60%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1cqmin;
+  color: var(--clk-bg);
+}
+
+.ground .label,
+.ground span {
+  color: var(--clk-bg);
+}
+
+/* --- Pill ----------------------------------------------------------------- */
+
+.pillCap {
+  font-size: 3.6cqmin;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clk-ink);
+}
+
+.pillBar {
+  position: relative;
+  height: 26cqmin;
+  border-radius: 999px;
+  /* A tint of the ink, not solid ink — see the note in Pill.tsx. */
+  background: color-mix(in srgb, var(--clk-ink) 22%, var(--clk-bg));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pillFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--clk-bg);
+}
+
+.pillTime {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 7cqmin;
+  font-size: 11cqmin;
+  font-weight: 700;
+  color: var(--clk-ink);
+}
+
+/* --- Tide ----------------------------------------------------------------- */
+
+.wave {
+  position: absolute;
+  top: -2.2cqmin;
+  left: 0;
+  width: 100%;
+  height: 2.4cqmin;
+}
+
+/* --- Split-flap ----------------------------------------------------------- */
+
+.flapRow {
+  display: flex;
+  gap: 1.6cqmin;
+  align-items: center;
+}
+
+.flap {
+  position: relative;
+  width: 15cqmin;
+  height: 22cqmin;
+  border-radius: 2cqmin;
+  background: var(--clk-ink);
+  color: var(--clk-onAccent, var(--clk-bg));
+  font-size: 13cqmin;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 -0.5cqmin 0 rgb(0 0 0 / 0.4);
+}
+
+.flapSeam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.5cqmin;
+  background: rgb(0 0 0 / 0.55);
+}
+
+/* --- Radar ---------------------------------------------------------------- */
+
+.radarDish {
+  position: relative;
+  width: 58cqmin;
+  height: 58cqmin;
+  border-radius: 50%;
+  border: 0.3cqmin solid color-mix(in srgb, var(--clk-accent) 40%, transparent);
+  overflow: hidden;
+}
+
+.radarTrail {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    color-mix(in srgb, var(--clk-accent) 35%, transparent) 0deg,
+    transparent 80deg
+  );
+  transform-origin: 50% 50%;
+}
+
+.radarRing {
+  position: absolute;
+  border-radius: 50%;
+  border: 0.25cqmin solid color-mix(in srgb, var(--clk-accent) 22%, transparent);
+}
+
+.radarNeedle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.5cqmin;
+  height: 50%;
+  margin-left: -0.25cqmin;
+  background: var(--clk-accent);
+  transform-origin: top center;
+}
+
+.radarHub {
+  position: absolute;
+  left: calc(50% - 0.8cqmin);
+  top: calc(50% - 0.8cqmin);
+  width: 1.6cqmin;
+  height: 1.6cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+}
+
+/* --- Bauhaus -------------------------------------------------------------- */
+
+.bauhausSquare {
+  display: block;
+  width: 3.4cqmin;
+  height: 3.4cqmin;
+  background: var(--clk-accent);
+}
+
+.bauhausDisc {
+  position: relative;
+  align-self: center;
+  width: 46cqmin;
+  height: 46cqmin;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--clk-accent) 30%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.bauhausHalf {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(var(--clk-accent) 50%, transparent 50%);
+  transform-origin: 50% 50%;
+}
+
+.bauhausPin {
+  position: absolute;
+  left: calc(50% - 1.3cqmin);
+  top: calc(50% - 1.3cqmin);
+  width: 2.6cqmin;
+  height: 2.6cqmin;
+  border-radius: 50%;
+  background: var(--clk-bg);
+}
+
+/* Readout plate for the fill designs (Tide, Field). Keeps the time ink-on-
+   background at every fill level instead of relying on blend modes. */
+.plate {
+  width: auto;
+  height: auto;
+  inset: auto;
+  padding: 4cqmin 7cqmin;
+  border-radius: var(--glu-radius-card, 4cqmin);
+  background: color-mix(in srgb, var(--clk-bg) 92%, transparent);
+  color: var(--clk-ink);
+}

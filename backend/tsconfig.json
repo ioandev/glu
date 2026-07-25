@@ -1,0 +1,21 @@
+{
+  // CommonJS emit is load-bearing: the sources use extensionless relative
+  // imports (`./config`), which NodeNext only resolves for CJS. Adding
+  // `"type": "module"` to package.json would break every one of them.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  // Tests and the Vitest config are type-checked by the editor but never
+  // emitted — dist/ holds exactly what `npm start` runs.
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "vitest.config.ts"]
+}

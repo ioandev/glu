@@ -1,0 +1,76 @@
+# GLU backend — the stateless Todoist proxy (ADR 11), mounted at /glu/api.
+# Run as `just backend <recipe>` from the repo root, or `just <recipe>` here.
+# This package installs on its own: its lockfile and node_modules live here.
+
+# List available recipes.
+default:
+    @just --justfile '{{ module_file() }}' --list
+
+# Install exactly as CI does.
+install:
+    npm ci
+
+# Next is NOT started — use the root's `just dev` for both halves.
+
+# Watch-mode API on :4000 (API_PORT in backend/.env).
+dev:
+    npm run dev
+
+# Type-check and emit dist/ (tests and the Vitest config are not emitted).
+build:
+    npm run build
+
+# Run the compiled server. Run `just backend build` first.
+start:
+    npm run start
+
+# The supertest suite over the auth, proxy and time-comment routes.
+test *ARGS:
+    npm test -- {{ARGS}}
+
+# The same suite in watch mode.
+watch:
+    npm run test:watch
+
+# ESLint over this package.
+lint:
+    npm run lint
+
+# Never overwrites an existing file — the real one holds Todoist secrets and is
+# gitignored.
+
+# Create backend/.env from the example on first setup.
+env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -e .env ]; then
+      echo ".env already exists — leaving it alone"
+    else
+      cp .env.example .env
+      echo "created backend/.env — fill in TODOIST_CLIENT_ID / TODOIST_CLIENT_SECRET"
+      echo "and SESSION_SECRET (generate one with: just backend secret)"
+    fi
+
+# One per environment — never reuse the development value in production.
+
+# Print a fresh SESSION_SECRET for backend/.env.
+secret:
+    @node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+
+# The context is this directory — the Dockerfile and .dockerignore live here
+# alongside the sources they copy (ADR 22).
+
+# Build this package's image (glu-api).
+docker-build TAG="glu-api:dev":
+    docker build -t {{TAG}} .
+
+# Secrets come from the environment; with none set the API still answers
+# /glu/api/healthz and reports "no Todoist app configured".
+
+# Run that image — health at http://localhost:<PORT>/glu/api/healthz
+docker-run TAG="glu-api:dev" PORT="4000":
+    docker run --rm -p {{PORT}}:4000 {{TAG}}
+
+# Drop this package's build output.
+clean:
+    rm -rf dist

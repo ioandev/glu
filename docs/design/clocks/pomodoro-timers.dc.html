@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Archivo+Black&display=swap" rel="stylesheet">
+<style>
+body { margin:0; background:#e8e6e1; font-family:'Space Grotesk',sans-serif; }
+a { color:#3c3a36; } a:hover { color:#ff6b57; }
+</style>
+</helmet>
+<section style="padding:48px 48px 8px;display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+  <!-- 2a Eclipse -->
+  <div id="2a" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2a</span><span style="font-size:12px;color:#6b675f">Eclipse — occluding disc</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#101014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;overflow:hidden">
+      <div style="position:relative;width:200px;height:200px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#f0ede6;box-shadow:0 0 60px rgba(240,237,230,0.35)"></div>
+        <div style="position:absolute;inset:0;border-radius:50%;background:#101014;transform:translateX({{ moonX }}px)"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <span style="font-size:40px;font-weight:500;color:#f0ede6">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:4px;color:#5a5a62">UNTIL BREAK</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2b Grid -->
+  <div id="2b" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2b</span><span style="font-size:12px;color:#6b675f">Grid — 25 minutes, 25 dots</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#eef4ef;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px">
+      <div style="display:grid;grid-template-columns:repeat(5, 34px);gap:16px">
+        <sc-for list="{{ dots25 }}" as="d" hint-placeholder-count="10">
+          <span style="width:34px;height:34px;border-radius:50%;background:{{ d.c }}"></span>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:34px;font-weight:700;color:#1e3a2b">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:#7fa38d">FOCUS</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2c Terminal -->
+  <div id="2c" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2c</span><span style="font-size:12px;color:#6b675f">Terminal — CLI</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#0a0f0a;display:flex;flex-direction:column;justify-content:center;padding:32px;box-sizing:border-box;gap:14px;font-family:'IBM Plex Mono',monospace">
+      <span style="font-size:12px;color:#3e7a4a">$ pomodoro --focus 25m</span>
+      <span style="font-size:12px;color:#3e7a4a">session 2/4 running…</span>
+      <span style="font-size:44px;color:#7dfc9a;margin:18px 0 6px">{{ t }}</span>
+      <span style="font-size:14px;color:#7dfc9a;letter-spacing:1px">{{ barStr }}</span>
+      <span style="font-size:12px;color:#2c5636">^C to abandon · s to skip</span>
+    </div>
+  </div>
+  <!-- 2d Sunset -->
+  <div id="2d" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2d</span><span style="font-size:12px;color:#6b675f">Sunset — descending sun</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:linear-gradient(#2a2140, #7a3d55, #d9764f, #f2b263);position:relative;overflow:hidden">
+      <div style="position:absolute;left:calc(50% - 46px);width:92px;height:92px;border-radius:50%;background:#ffd9a0;box-shadow:0 0 50px rgba(255,217,160,0.6);top:{{ sunY }}"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:120px;background:#1d1526"></div>
+      <div style="position:absolute;left:0;right:0;bottom:120px;height:2px;background:rgba(255,217,160,0.5)"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        <span style="font-size:38px;font-weight:500;color:#f6e7cf">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:4px;color:#9b8aa8">FOCUS UNTIL SUNDOWN</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2e Pill -->
+  <div id="2e" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2e</span><span style="font-size:12px;color:#6b675f">Pill — bold bar</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#f5d90a;display:flex;flex-direction:column;justify-content:center;padding:28px;box-sizing:border-box;gap:22px">
+      <span style="font-size:15px;font-weight:700;color:#1a1a1a;letter-spacing:1px">FOCUS — 2/4</span>
+      <div style="height:110px;border-radius:999px;background:#1a1a1a;position:relative;overflow:hidden">
+        <div style="position:absolute;left:0;top:0;bottom:0;background:#fffdf2;width:{{ pPct }}"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 30px;mix-blend-mode:difference">
+          <span style="font-size:44px;font-weight:700;color:#fff">{{ t }}</span>
+        </div>
+      </div>
+      <span style="font-size:15px;font-weight:700;color:#1a1a1a;align-self:flex-end">{{ pPct }} DONE</span>
+    </div>
+  </div>
+  <!-- 2f Wave -->
+  <div id="2f" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2f</span><span style="font-size:12px;color:#6b675f">Tide — liquid fill</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#e8f4f4;position:relative;overflow:hidden">
+      <div style="position:absolute;left:0;right:0;bottom:0;background:#17a2a2;height:{{ pPct }}">
+        <svg width="340" height="24" viewBox="0 0 340 24" style="position:absolute;top:-23px;left:0" preserveAspectRatio="none">
+          <path d="M0 24 Q 42.5 0 85 12 T 170 12 T 255 12 T 340 12 L 340 24 Z" fill="#17a2a2"></path>
+        </svg>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;mix-blend-mode:difference;color:#fff">
+        <span style="font-size:56px;font-weight:500">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:4px">FILLING · FOCUS</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2g Flip -->
+  <div id="2g" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2g</span><span style="font-size:12px;color:#6b675f">Split-flap — departures board</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#efe9df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <sc-for list="{{ flips }}" as="f" hint-placeholder-count="4">
+          <span style="width:58px;height:84px;border-radius:8px;background:#26241f;color:#f4efe4;font-size:48px;font-weight:500;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:inset 0 -2px 0 rgba(0,0,0,0.5)"><span style="position:absolute;left:0;right:0;top:50%;height:2px;background:#000;opacity:0.55"></span>{{ f.d }}</span>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:4px;color:#8c8474">NOW DEPARTING · FOCUS</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#b3a990">PLATFORM 2 OF 4</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2h Radar -->
+  <div id="2h" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2h</span><span style="font-size:12px;color:#6b675f">Radar — sweep</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#07120c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px">
+      <div style="position:relative;width:240px;height:240px;border-radius:50%;border:1px solid #1c3a26;background:conic-gradient(from {{ trailFrom }}deg, transparent 0deg, rgba(77,222,128,0.35) 80deg, transparent 80deg)">
+        <div style="position:absolute;inset:40px;border-radius:50%;border:1px solid #14291b"></div>
+        <div style="position:absolute;inset:80px;border-radius:50%;border:1px solid #14291b"></div>
+        <div style="position:absolute;left:50%;top:50%;width:2px;height:120px;background:#4ade80;transform-origin:top center;transform:rotate({{ needleDeg }}deg)"></div>
+        <div style="position:absolute;left:calc(50% - 3px);top:calc(50% - 3px);width:6px;height:6px;border-radius:50%;background:#4ade80"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:34px;color:#b7f7c8">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:4px;color:#3e7a4a">SCANNING · FOCUS 2/4</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2i Bauhaus -->
+  <div id="2i" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2i</span><span style="font-size:12px;color:#6b675f">Bauhaus — rotating half-disc</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#f2ede3;display:flex;flex-direction:column;justify-content:space-between;padding:32px;box-sizing:border-box">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:700;color:#22222a;letter-spacing:2px">FOCUS</span>
+        <span style="width:14px;height:14px;background:#d9482b"></span>
+      </div>
+      <div style="align-self:center;position:relative;width:190px;height:190px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#e8b23e"></div>
+        <div style="position:absolute;inset:0;border-radius:50%;background:linear-gradient(#2f4b8f 50%, transparent 50%);transform:rotate({{ rotDeg }}deg)"></div>
+        <div style="position:absolute;left:calc(50% - 5px);top:calc(50% - 5px);width:10px;height:10px;border-radius:50%;background:#f2ede3"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:44px;font-weight:700;color:#22222a">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8578">2 / 4</span>
+      </div>
+    </div>
+  </div>
+  <!-- 2j Edge -->
+  <div id="2j" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">2j</span><span style="font-size:12px;color:#6b675f">Edge — border progress</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#ffffff;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+      <svg width="340" height="460" viewBox="0 0 340 460" style="position:absolute;inset:0">
+        <rect x="3" y="3" width="334" height="454" rx="25" fill="none" stroke="#efece6" stroke-width="5"></rect>
+        <rect x="3" y="3" width="334" height="454" rx="25" fill="none" stroke="#1f1e1b" stroke-width="5" stroke-linecap="round" stroke-dasharray="1533" stroke-dashoffset="{{ offJ }}"></rect>
+      </svg>
+      <span style="font-size:64px;font-weight:400;color:#1f1e1b;letter-spacing:-1px">{{ t }}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:4px;color:#b6b0a4">FOCUS · 2/4</span>
+    </div>
+  </div>
+</section>
+<section style="padding:48px;display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+  <!-- 1a Halo -->
+  <div id="1a" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1a</span><span style="font-size:12px;color:#6b675f">Halo — classic ring</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#faf7f2;box-shadow:0 1px 2px rgba(0,0,0,0.06),0 12px 32px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;position:relative">
+      <svg width="250" height="250" viewBox="0 0 250 250">
+        <circle cx="125" cy="125" r="110" fill="none" stroke="#eee7dc" stroke-width="8"></circle>
+        <circle cx="125" cy="125" r="110" fill="none" stroke="#ff6b57" stroke-width="8" stroke-linecap="round" stroke-dasharray="691.15" stroke-dashoffset="{{ offA }}" transform="rotate(-90 125 125)"></circle>
+        <text x="125" y="122" text-anchor="middle" font-family="Space Grotesk" font-size="46" font-weight="500" fill="#2b2925">{{ t }}</text>
+        <text x="125" y="152" text-anchor="middle" font-family="Space Grotesk" font-size="12" letter-spacing="4" fill="#a39c8f">FOCUS</text>
+      </svg>
+      <div style="display:flex;gap:10px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#ff6b57"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#ff6b57"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#e6ddd0"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#e6ddd0"></span>
+      </div>
+    </div>
+  </div>
+  <!-- 1b Meridian -->
+  <div id="1b" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1b</span><span style="font-size:12px;color:#6b675f">Meridian — 60 ticks</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#16181d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px">
+      <div style="position:relative;width:260px;height:260px">
+        <sc-for list="{{ ticks }}" as="tk" hint-placeholder-count="12">
+          <span style="position:absolute;left:calc(50% - 1px);top:6px;width:2px;height:14px;border-radius:1px;transform-origin:1px 124px;transform:rotate({{ tk.deg }}deg);background:{{ tk.c }}"></span>
+        </sc-for>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:500;color:#f2f4f1">{{ t }}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5c636e;letter-spacing:2px">FOCUS · 2/4</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 1c Broadside -->
+  <div id="1c" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1c</span><span style="font-size:12px;color:#6b675f">Broadside — typographic</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#f4f1ea;display:flex;flex-direction:column;justify-content:space-between;padding:32px;box-sizing:border-box">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:#8f887a">POMODORO — FOCUS</span>
+      <div style="display:flex;flex-direction:column;line-height:0.92">
+        <span style="font-family:'Archivo Black',sans-serif;font-size:132px;color:#141414">{{ tMin }}</span>
+        <span style="font-family:'Archivo Black',sans-serif;font-size:132px;color:#c9c2b2">{{ tSec }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="height:3px;background:#e2dccd;border-radius:2px;overflow:hidden"><div style="height:100%;background:#141414;width:{{ pPct }}"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8f887a">SESSION 2 OF 4</span>
+      </div>
+    </div>
+  </div>
+  <!-- 1d Aurora -->
+  <div id="1d" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1d</span><span style="font-size:12px;color:#6b675f">Aurora — ambient glow</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#0b0e1a;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+      <div style="position:absolute;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle at 35% 35%, #7c5cff, transparent 65%);filter:blur(48px);top:90px;left:20px"></div>
+      <div style="position:absolute;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle at 60% 60%, #2bd4c0, transparent 65%);filter:blur(52px);top:130px;left:110px"></div>
+      <span style="position:relative;font-size:60px;font-weight:400;color:#f4f5fb;letter-spacing:1px">{{ t }}</span>
+      <span style="position:relative;font-size:12px;letter-spacing:4px;color:rgba(244,245,251,0.55);border:1px solid rgba(244,245,251,0.25);border-radius:999px;padding:6px 16px">FOCUS</span>
+    </div>
+  </div>
+  <!-- 1e Mono -->
+  <div id="1e" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1e</span><span style="font-size:12px;color:#6b675f">Mono — brutalist ink</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#0c0c0c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;position:relative">
+      <span style="position:absolute;top:20px;left:24px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#555">TIMER_01</span>
+      <span style="position:absolute;top:20px;right:24px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#555">{{ pPct }}</span>
+      <svg width="230" height="230" viewBox="0 0 230 230">
+        <circle cx="115" cy="115" r="100" fill="none" stroke="#2e2e2e" stroke-width="2" stroke-dasharray="3 6"></circle>
+        <circle cx="115" cy="115" r="100" fill="none" stroke="#f5f5f5" stroke-width="2" stroke-dasharray="628.3" stroke-dashoffset="{{ offE }}" transform="rotate(-90 115 115)"></circle>
+        <text x="115" y="112" text-anchor="middle" font-family="IBM Plex Mono" font-size="36" fill="#f5f5f5">{{ t }}</text>
+        <text x="115" y="142" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" letter-spacing="3" fill="#666">FOCUS</text>
+      </svg>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#555;letter-spacing:2px">[ 2 / 4 ]</span>
+    </div>
+  </div>
+  <!-- 1f Stack -->
+  <div id="1f" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1f</span><span style="font-size:12px;color:#6b675f">Stack — depleting slats</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#eceaf7;display:flex;box-sizing:border-box;padding:32px;gap:28px">
+      <div style="display:flex;flex-direction:column;gap:5px;width:64px">
+        <sc-for list="{{ blocks }}" as="b" hint-placeholder-count="8">
+          <span style="flex:1;border-radius:3px;background:{{ b.c }}"></span>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px">
+        <span style="font-size:52px;font-weight:700;color:#232144;line-height:1">{{ t }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:#8b87b8">FOCUS · 2/4</span>
+      </div>
+    </div>
+  </div>
+  <!-- 1g Orbit -->
+  <div id="1g" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1g</span><span style="font-size:12px;color:#6b675f">Orbit — dual rings</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#fdf3ec;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+      <svg width="260" height="260" viewBox="0 0 260 260">
+        <circle cx="130" cy="130" r="112" fill="none" stroke="#f3e0d2" stroke-width="10"></circle>
+        <circle cx="130" cy="130" r="112" fill="none" stroke="#f0925f" stroke-width="10" stroke-linecap="round" stroke-dasharray="703.7" stroke-dashoffset="{{ offG }}" transform="rotate(-90 130 130)"></circle>
+        <circle cx="130" cy="130" r="86" fill="none" stroke="#ece2f0" stroke-width="10"></circle>
+        <circle cx="130" cy="130" r="86" fill="none" stroke="#b18ad4" stroke-width="10" stroke-linecap="round" stroke-dasharray="540.35" stroke-dashoffset="270.2" transform="rotate(-90 130 130)"></circle>
+        <text x="130" y="128" text-anchor="middle" font-family="Space Grotesk" font-size="38" font-weight="500" fill="#3a2e26">{{ t }}</text>
+        <text x="130" y="156" text-anchor="middle" font-family="Space Grotesk" font-size="11" letter-spacing="3" fill="#b59d8c">CYCLE 2/4</text>
+      </svg>
+      <div style="display:flex;gap:16px;font-size:11px;letter-spacing:2px">
+        <span style="color:#f0925f">● SESSION</span>
+        <span style="color:#b18ad4">● CYCLES</span>
+      </div>
+    </div>
+  </div>
+  <!-- 1h Field -->
+  <div id="1h" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#3c3a36;color:#fff;padding:2px 8px;border-radius:999px">1h</span><span style="font-size:12px;color:#6b675f">Field — rising fill, monotone</span></div>
+    <div style="width:340px;height:460px;border-radius:28px;background:#d8d4cd;position:relative;overflow:hidden">
+      <div style="position:absolute;left:0;right:0;bottom:0;background:#3c3a36;height:{{ pPct }}"></div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;mix-blend-mode:difference;color:#fff">
+        <span style="font-size:88px;font-weight:400;letter-spacing:-2px;line-height:1">{{ tMin }}</span>
+        <span style="font-size:88px;font-weight:400;letter-spacing:-2px;line-height:1">{{ tSec }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:4px;margin-top:14px">FOCUS</span>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;progress&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:30,&quot;min&quot;:0,&quot;max&quot;:100,&quot;step&quot;:1,&quot;unit&quot;:&quot;%&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;State&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = Math.min(1, Math.max(0, (this.props.progress ?? 30) / 100));
+    const rem = Math.round(1500 * (1 - p));
+    const mm = String(Math.floor(rem / 60)).padStart(2, '0');
+    const ss = String(rem % 60).padStart(2, '0');
+    const lit = Math.round(p * 60);
+    const spent = Math.round(p * 25);
+    return {
+      t: mm + ':' + ss,
+      tMin: mm, tSec: ss,
+      pPct: Math.round(p * 100) + '%',
+      offA: 691.15 * (1 - p),
+      offE: 628.3 * (1 - p),
+      offG: 703.7 * (1 - p),
+      ticks: Array.from({ length: 60 }, (_, i) => ({ deg: i * 6, c: i < lit ? '#7ee8c7' : '#2a2e36' })),
+      blocks: Array.from({ length: 25 }, (_, i) => ({ c: i < spent ? '#d4d0ea' : '#5b5bd6' })),
+      moonX: Math.round(200 * (1 - p) - 100) * -1,
+      dots25: Array.from({ length: 25 }, (_, i) => ({ c: i < spent ? '#1e3a2b' : '#cfe0d4' })),
+      barStr: '[' + '█'.repeat(Math.round(p * 18)) + '░'.repeat(18 - Math.round(p * 18)) + '] ' + Math.round(p * 100) + '%',
+      sunY: Math.round(30 + p * 250) + 'px',
+      flips: [mm[0], mm[1], ss[0], ss[1]].map(d => ({ d })),
+      needleDeg: Math.round(p * 360 * 10) / 10 + 180,
+      trailFrom: Math.round(p * 360 * 10) / 10 - 80,
+      rotDeg: Math.round(p * 360 * 10) / 10 - 90,
+      offJ: 1533 * (1 - p),
+    };
+  }
+}
+</script>
+</body>
+</html>

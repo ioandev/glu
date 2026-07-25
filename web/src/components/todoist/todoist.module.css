@@ -1,0 +1,462 @@
+/* The Todoist button is deliberately brand-on-brand: their red, their mark.
+   That makes it self-contained for contrast, so it reads identically across all
+   18 clock palettes and both schemes (ADR 11). */
+
+.loginButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--glu-control-radius);
+  background: #e44332;
+  color: #ffffff;
+  font-family: var(--glu-label-family);
+  /* Todoist red with white text is 4.07:1 — under the 4.5:1 normal-text gate
+     but comfortably over the 3:1 large-text one. The brand colour is theirs and
+     not ours to adjust, so the type goes up instead: 19px/700 is WCAG "large
+     text", and it makes the region's only call to action properly thumb-sized.
+     (ADR 11 / ADR 03's a11y gate.) */
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.loginButton:hover {
+  background: #d13c2c;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-pill);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fixed height across every state, so the region never shifts as `/status`
+   resolves (ADR 11). */
+.slot {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.accountMenu {
+  background: var(--glu-surface-strong);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  color: var(--glu-page-fg);
+  padding: 6px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  width: 100%;
+  padding: 0 14px;
+  border-radius: var(--glu-control-radius);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-size: 14px;
+}
+
+/* --- Task cards (ADR 12) -------------------------------------------------- */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+}
+
+.priorityCircle {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  border-width: 2px;
+  border-style: solid;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  color: inherit;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.cardTitle {
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* CSS clamp, never JS measurement — these live in a scrolling container on 36
+   palette combinations, so they stay cheap (ADR 12). */
+.cardDescription {
+  font-size: 12px;
+  color: var(--glu-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.focusButton {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--glu-control-radius);
+  color: var(--glu-accent-text);
+}
+
+/* --- List --------------------------------------------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Clears ADR 10's fixed corner arrow, which owns the extreme top-right — the
+     same gutter the design mockups leave. */
+  padding-right: 52px;
+}
+
+.headerSpacer {
+  flex: 1;
+}
+
+.toolsButton {
+  width: 44px;
+  height: 44px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolsButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The refresh control is the visible half of ADR 12's revalidation: it spins
+   for as long as the request is in flight, so a refresh that returns the same
+   tasks still reads as "it happened". */
+.refreshButton[data-refreshing] svg {
+  animation: glu-refresh-spin 900ms linear infinite;
+}
+
+@keyframes glu-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refreshButton[data-refreshing] svg {
+    animation: none;
+  }
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.sectionHeader {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--glu-muted);
+  padding: 6px 4px 0;
+}
+
+.hint,
+.truncation,
+.errorText {
+  font-size: 13px;
+  color: var(--glu-muted);
+  padding: 4px;
+}
+
+.errorText {
+  color: var(--glu-accent-text);
+}
+
+.pickerDropdown {
+  background: var(--glu-surface-strong);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  color: var(--glu-page-fg);
+  width: 280px;
+}
+
+/* --- Task detail (ADR 13) ------------------------------------------------- */
+
+.detailPanel {
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+  border-left: var(--glu-border);
+}
+
+.detailHeader {
+  background: transparent;
+  color: var(--glu-page-fg);
+  font-family: var(--glu-heading-family);
+}
+
+.detailTitleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.detailTitle {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.detailDescription {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--glu-page-fg);
+  /* Line breaks preserved; no markdown engine (ADR 13). */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detailAction {
+  min-height: 44px;
+  padding: 0 16px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  cursor: pointer;
+}
+
+.comment {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px;
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  background: var(--glu-surface);
+}
+
+.commentImageBox {
+  margin-top: 4px;
+  width: 100%;
+  border-radius: var(--glu-radius-control);
+  overflow: hidden;
+  background: var(--glu-surface-strong);
+}
+
+.commentImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* --- Focused task (ADR 14) ------------------------------------------------ */
+
+.focusedCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: var(--glu-border);
+  border-color: var(--glu-accent);
+  border-radius: var(--glu-radius-card);
+  background: var(--glu-surface-strong);
+  box-shadow: var(--glu-shadow);
+}
+
+.focusedTopRow,
+.focusedBottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.focusedLabel {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--glu-accent-text);
+}
+
+.timeBadge {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--glu-accent-text);
+  border-radius: var(--glu-radius-control);
+  padding: 3px 7px;
+  background: var(--glu-surface);
+}
+
+.focusedMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.focusedTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--glu-page-fg);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.pendingBadge {
+  font-size: 11px;
+  color: var(--glu-muted);
+}
+
+.unfocusButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--glu-control-radius);
+  color: var(--glu-muted);
+  font-size: 12px;
+}
+
+/* --- Undo bar (ADR 14) ---------------------------------------------------- */
+
+.undoBar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 8px 0 18px;
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-pill);
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+  box-shadow: var(--glu-shadow);
+  /* Compact enough not to cover the transport controls or the environment
+     toggles, even at 590px (ADR 14). */
+  max-width: min(92vw, 420px);
+}
+
+.undoBadge {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--glu-accent-text);
+}
+
+.undoText {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.undoButton {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--glu-radius-pill);
+  background: var(--glu-accent);
+  color: var(--glu-on-accent);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* --- The complete affordance (ADR 20) ------------------------------------- */
+
+/* The visible circle is small; the target is not. */
+.circleHalo {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--glu-control-radius);
+}
+
+.circleHalo .priorityCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card[data-completing] {
+  opacity: 0.55;
+}
+
+.cardError {
+  font-size: 11px;
+  color: var(--glu-accent-text);
+}

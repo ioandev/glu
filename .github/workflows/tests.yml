@@ -1,0 +1,181 @@
+name: Tests
+
+# Reusable test suite (ADR 03's unit + story layers; ADR 09's Playwright layer).
+# Called by:
+#   - ci.yml      → on PRs + feature-branch pushes (pre-merge validation)
+#   - publish.yml → as the gate that must pass BEFORE any image is built/pushed
+# Keeping the jobs here (workflow_call) means there is exactly one definition of
+# "green" — poached from zantiflow's tests.yml (ADR 16's audit table).
+#
+# web/ and backend/ are independent packages with their own lockfiles, so every
+# job pins both its working directory and the lockfile setup-node caches on.
+on:
+  workflow_call:
+
+jobs:
+  # Which optional repo artifacts exist, so their jobs run only once present.
+  # zantiflow uses this for not-yet-scaffolded language stacks; GLU is
+  # single-stack, so the one real conditional is ADR 23's license generator —
+  # this keeps the suite green on a branch that predates it.
+  #
+  # The poached lesson: test each candidate individually. `ls a b c` exits
+  # non-zero if ANY operand is missing, which silently reported false for the
+  # whole group — the bug zantiflow's `detect` comment documents.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      licenses: ${{ steps.f.outputs.licenses }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        shell: bash
+        run: |
+          if [ -f scripts/generate-licenses.mjs ]; then
+            echo "licenses=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "licenses=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Lint is its own job: it is the fastest signal and does not need the browser
+  # binaries the test job installs. Single Node version — lint results do not
+  # vary by runtime (zantiflow's reasoning, and it holds here too).
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  # Unit + story tests (Vitest, browser mode via Playwright) and both builds.
+  # `build-storybook` is the tripwire for the two-bundler split (ADR 03).
+  #
+  # Node matrix (owner decision 2026-07-25, reversing ADR 16's "skip"): the
+  # image pins 24, so 24 is the leg that must stay green; 22 is the active-LTS
+  # canary that catches a dependency quietly raising its floor before the image
+  # base bumps into it.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # The story project runs in real Chromium; --with-deps pulls the OS
+      # libraries the bare browser download does not carry.
+      - name: Install Playwright browser (+ OS deps)
+        run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run build
+      - run: npm run build-storybook
+
+  # The Express proxy (ADR 11). Its own package, so its own lint/test/build —
+  # this used to be the `server` project inside the web Vitest config. Matrixed
+  # for the same reason as `test`, and it is the tier likeliest to notice: it
+  # calls Node APIs directly (`--env-file-if-exists`, `node:crypto`).
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  # ADR 09's suite, against the production build under `basePath: '/glu'`.
+  # Four projects: Chromium and WebKit x tablet and half-tablet. Single Node
+  # version on purpose — this job is browser-bound, and doubling it would
+  # double the slowest thing in the suite for no signal the matrix above
+  # does not already give.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Install Playwright browsers (+ OS deps)
+        run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7
+
+  # ADR 23 §5 / step 8: regenerate all three manifests from the frozen
+  # lockfiles and warn if a committed one is stale — i.e. someone changed a
+  # dependency but forgot `just license`. This job NEVER fails on drift
+  # (zantiflow ADR-0047's downgrade, adopted by ADR 23): the fix is one
+  # command, and blocking a merge on a hygiene miss is the wrong trade. Its
+  # own job so it stays off the critical path.
+  license-drift:
+    needs: detect
+    if: needs.detect.outputs.licenses == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          # Both lockfiles: the generator reads each package's installed tree.
+          cache-dependency-path: |
+            web/package-lock.json
+            backend/package-lock.json
+      # `npm query` reports the installed lockstate, so both trees must exist
+      # before any scope is generated — the root union scope reads both.
+      - run: npm ci
+        working-directory: web
+      - run: npm ci
+        working-directory: backend
+      - name: Regenerate all three manifests
+        run: |
+          node scripts/generate-licenses.mjs --scope all     --out LICENSES
+          node scripts/generate-licenses.mjs --scope web     --out web/LICENSES
+          node scripts/generate-licenses.mjs --scope backend --out backend/LICENSES
+      - name: Warn if a committed manifest is stale
+        run: |
+          if ! git diff --quiet -- LICENSES web/LICENSES backend/LICENSES; then
+            git diff --stat -- LICENSES web/LICENSES backend/LICENSES
+            echo "::warning::A committed LICENSES manifest is stale — run \`just license\` and commit the result."
+          fi

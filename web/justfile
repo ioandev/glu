@@ -1,0 +1,94 @@
+# GLU web — the Next.js app, its stories and its e2e suite.
+# Run as `just web <recipe>` from the repo root, or `just <recipe>` from here.
+# This package installs on its own: its lockfile and node_modules live here.
+
+# List available recipes.
+default:
+    @just --justfile '{{ module_file() }}' --list
+
+# Install exactly as CI does.
+install:
+    npm ci
+
+# The app lives under basePath '/glu' — open http://localhost:<PORT>/glu ; `/`
+# 404s by design. This starts the web half only; for both use the root's
+# `just dev`, which also brings up the API the task views need.
+
+# Next dev server only (no API).
+dev PORT="3000":
+    npx next dev -p {{PORT}}
+
+# Production build (`output: 'standalone'` — see next.config.ts).
+build:
+    npm run build
+
+# Serve the production build. Run `just web build` first.
+start PORT="3000":
+    npx next start -p {{PORT}}
+
+# ESLint over this package.
+lint:
+    npm run lint
+
+# This package's own layers — jsdom units, then every story in both schemes.
+test: test-unit test-stories
+
+# Store, hooks and reducers under jsdom, on a real origin (ADR 03).
+test-unit:
+    npm run test:unit
+
+# Dark is where theming regressions hide, which is why CI runs both schemes.
+
+# Every story's play function in headless Chromium — light, then dark.
+test-stories:
+    npm run test:stories
+    npm run test:stories:dark
+
+# Vitest in watch mode across every project.
+watch:
+    npm run test:watch
+
+# Storybook dev server on :6006.
+storybook:
+    npm run storybook
+
+# Static Storybook build — the tripwire for the two-bundler split (ADR 03).
+build-storybook:
+    npm run build-storybook
+
+# ADR 09's suite runs against a production build, so this builds first.
+# Flags pass through, e.g. `just web e2e --project=chromium-tablet`.
+
+# Run the Playwright e2e suite.
+e2e *ARGS:
+    npm run test:e2e -- {{ARGS}}
+
+# The same suite in Playwright's UI mode.
+e2e-ui:
+    npm run test:e2e:ui
+
+# Install the browsers the story and e2e layers drive (+ their OS deps).
+browsers:
+    npx playwright install --with-deps chromium webkit
+
+# The SVG is the source of truth — img/favicon.png is a non-square export and
+# must never be scaled up (ADR 04).
+
+# Regenerate the app + PWA icons from img/favicon.svg.
+icons:
+    npm run icons
+
+# The context is this directory — the Dockerfile and .dockerignore live here
+# alongside the sources they copy (ADR 22).
+
+# Build this package's image (glu-web).
+docker-build TAG="glu-web:dev":
+    docker build -t {{TAG}} .
+
+# Run that image — then open http://localhost:<PORT>/glu
+docker-run TAG="glu-web:dev" PORT="3000":
+    docker run --rm -p {{PORT}}:3000 {{TAG}}
+
+# Drop this package's build outputs.
+clean:
+    rm -rf .next storybook-static playwright-report test-results

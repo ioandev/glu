@@ -1,0 +1,97 @@
+.gallery {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.5vw, 16px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.chevron {
+  /* Always visible but visually quiet, and never below the touch floor. */
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex: none;
+  color: var(--glu-muted);
+  border-radius: var(--glu-control-radius);
+}
+
+.slot {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-width: 520px;
+  /* Horizontal drags are ours; vertical scrolling stays the browser's, which is
+     what keeps a page scroll on mobile from flipping a clock (ADR 08). */
+  touch-action: pan-y;
+  display: flex;
+  /* ADR 25: the slide is a clock-sized event. Clipping here is what stops a
+     departing clock painting over the chevrons and the environment toggles —
+     the local equivalent of lifting the chrome out of the transition. */
+  position: relative;
+  overflow: clip;
+}
+
+/* One flip mounts two of these for 420 ms and no longer (ADR 25). `inset: 0`
+   is load-bearing: ADR 07's `.frame` is `container-type: size`, and every
+   `cqmin` in all 18 designs collapses without a definite box to resolve. */
+.layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.layer[data-animate] {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+  will-change: transform;
+}
+
+/* Dragging left moves forward, so forward departs to the left and the incoming
+   clock follows the finger in from the right. Back mirrors it. */
+.layer[data-animate][data-role="leaving"][data-direction="forward"] {
+  animation-name: flip-out-left;
+}
+.layer[data-animate][data-role="entering"][data-direction="forward"] {
+  animation-name: flip-in-right;
+}
+.layer[data-animate][data-role="leaving"][data-direction="back"] {
+  animation-name: flip-out-right;
+}
+.layer[data-animate][data-role="entering"][data-direction="back"] {
+  animation-name: flip-in-left;
+}
+
+@keyframes flip-out-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes flip-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes flip-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes flip-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+/* Belt to the hook's braces: the slide cannot survive a hook regression. */
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+}

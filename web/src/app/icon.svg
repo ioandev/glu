@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 508 523" width="508" height="523">
+  <!-- Copy of img/favicon.svg (the source of truth) with a dark-scheme ink swap:
+       the mark's #141D2A is near-invisible against dark browser chrome, and SVG
+       favicons honour media queries declared inside the file (ADR 01). -->
+  <style>
+    .glu-ink { stroke: #141D2A; }
+    .glu-fill { fill: #141D2A; }
+    @media (prefers-color-scheme: dark) {
+      .glu-ink { stroke: #E8ECF2; }
+      .glu-fill { fill: #E8ECF2; }
+    }
+  </style>
+  <g class="glu-ink" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 392.93 122.41 A 206.0 206.0 0 1 0 452.0 266.8" stroke-width="53.9"/>
+    <path d="M 367 267.5 L 452 267" stroke-width="53.6"/>
+    <path d="M 245.5 174 L 245.5 266.5 L 295.5 315.5" stroke-width="25.8"/>
+  </g>
+  <g class="glu-fill">
+    <circle cx="245.5" cy="124.7" r="13.3"/>
+    <circle cx="103" cy="265.3" r="13.3"/>
+    <circle cx="245.9" cy="409.4" r="13.3"/>
+  </g>
+</svg>

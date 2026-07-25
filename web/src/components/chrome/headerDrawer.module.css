@@ -1,0 +1,51 @@
+/* Chrome-token styled (ADR 15): shape, material and label treatment all come
+   from the active direction. */
+
+.arrow {
+  color: var(--glu-muted);
+  border-radius: var(--glu-control-radius);
+}
+
+.panel {
+  background: var(--glu-surface-strong);
+  color: var(--glu-page-fg);
+  border-left: var(--glu-border);
+  box-shadow: var(--glu-shadow);
+}
+
+.panelHeader {
+  background: transparent;
+  color: var(--glu-page-fg);
+  font-family: var(--glu-heading-family);
+  font-weight: var(--glu-heading-weight);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-control);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  cursor: pointer;
+}
+
+.rowLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.rowTrailing {
+  color: var(--glu-muted);
+  display: inline-flex;
+  align-items: center;
+}

@@ -1,0 +1,156 @@
+# GLU — example deployment for ioan.dev (ADR 16 Phase B, amended 2026-07-25:
+# the proxy is nginx-proxy, not Caddy).
+#
+#   cp deploy/docker-compose.example.yml /srv/glu/docker-compose.yml
+#   cp deploy/.env.example               /srv/glu/.env     # then fill it — NEVER commit .env
+#   docker compose up -d
+#
+# Security posture, poached from zantiflow: only the proxy publishes ports,
+# images are pinned, every service has a healthcheck and a memory limit, and
+# secrets live in .env. There is deliberately **no database service** — the GLU
+# backend is a stateless Todoist proxy (ADR 11) and session data is local to the
+# browser (ADR 05).
+#
+# Routing is path-based on ONE hostname, which nginx-proxy does through
+# VIRTUAL_PATH. Two things make that safe, both verified against real nginx
+# rather than assumed:
+#
+#   * nginx-proxy emits `location <path>` — a plain **prefix** location — so
+#     nginx's longest-prefix-wins rule decides, independent of the order the
+#     containers happen to be discovered in. `/glu/api/...` reaches the API even
+#     though `/glu` also matches. This is the opposite of the Caddyfile this
+#     replaced, where block order was load-bearing.
+#   * The paths carry **no trailing slash**. `VIRTUAL_PATH=/glu/` would emit
+#     `location /glu/`, which does not match a bare `/glu` — and `/glu` is the
+#     app's canonical URL. The cost is that `/gluten` would also match the web
+#     tier; nothing else lives on this domain, so that is priced in.
+#
+# `VIRTUAL_DEST` is deliberately unset on both: each app expects to see its full
+# path (Next owns `basePath: '/glu'`, Express mounts its router at `/glu/api`).
+# Setting `VIRTUAL_DEST=/` would strip the prefix and every route would 404 —
+# the same trap Caddy's `handle_path` set.
+
+name: glu
+
+services:
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:1.7-alpine # pinned — no :latest in prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # This proxy IS the edge, so an inbound X-Forwarded-For is a caller's
+      # invention, not a hop. `false` makes nginx-proxy *assign* the forwarded
+      # headers from $remote_addr instead of appending to whatever arrived,
+      # which is what lets ADR 24's rate limiters see a client IP nobody can
+      # forge. X-Real-IP is $remote_addr either way.
+      #
+      # Set this to `true` ONLY if something else genuinely fronts this proxy
+      # (a CDN, another nginx). Doing so while this is the edge hands every
+      # caller the ability to pick their own rate-limit bucket.
+      TRUST_DOWNSTREAM_PROXY: "false"
+    volumes:
+      # Read-only, and the only reason this container is privileged at all:
+      # it discovers the vhosts below by reading container metadata.
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - certs:/etc/nginx/certs
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+    mem_limit: 256m
+
+  # Let's Encrypt — the piece Caddy used to do by itself. Issues and renews for
+  # every container carrying LETSENCRYPT_HOST.
+  acme:
+    image: nginxproxy/acme-companion:2.6 # pinned
+    restart: unless-stopped
+    depends_on:
+      - nginx-proxy
+    environment:
+      DEFAULT_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      # Must match the proxy container's real name, which compose derives as
+      # <project>-<service>-<index>. `name: glu` above is what makes this
+      # predictable — rename the project and this needs to change with it.
+      NGINX_PROXY_CONTAINER: glu-nginx-proxy-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/etc/nginx/certs
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - acme:/etc/acme.sh
+    mem_limit: 128m
+
+  web:
+    # publish.yml exports GLU_TAG=sha-<short> over SSH so a deploy converges on
+    # the exact image it tested. Unset (a manual `up -d`) falls back to :edge —
+    # the moving newest-main tag, which is what continuous deploy tracks. NOT
+    # :latest: since the 2026-07-25 amendment that tag means "highest stable
+    # Release", which does not exist until someone publishes one.
+    # Rollback: `GLU_TAG=sha-<known-good> docker compose up -d` (or a release
+    # version, e.g. GLU_TAG=1.2.3).
+    image: ghcr.io/ioandev/glu-web:${GLU_TAG:-edge}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      VIRTUAL_HOST: ioan.dev
+      VIRTUAL_PATH: /glu
+      VIRTUAL_PORT: "3000"
+      LETSENCRYPT_HOST: ioan.dev
+      # nginx-proxy's own default is max-age only; this matches what the
+      # Caddyfile used to send. HSTS stays at the proxy because it is a
+      # statement about the TLS connection, which is the proxy's to make.
+      # Everything else Caddy used to add — nosniff, frame-options,
+      # referrer-policy, the API's CSP — now comes from the apps themselves, so
+      # it survives the next proxy swap (ADR 16 amendment).
+      HSTS: "max-age=31536000; includeSubDomains; preload"
+    # NO published port — reached only via nginx-proxy.
+    healthcheck:
+      # basePath means the app answers under /glu; a probe on /healthz 404s.
+      # ADR 24 exempts this path from the rate limiter for exactly this reason.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/glu/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+
+  # ADR 11's Express proxy, containerised per ADR 16 step 8 (backend/Dockerfile).
+  api:
+    image: ghcr.io/ioandev/glu-api:${GLU_TAG:-edge} # same GLU_TAG pin as web
+    restart: unless-stopped
+    env_file: .env # TODOIST_CLIENT_ID / _SECRET, SESSION_SECRET, PUBLIC_ORIGIN
+    environment:
+      # The Dockerfile already sets this; restating it here means an error
+      # response can never regress into Express's stack-trace HTML because
+      # someone overrode the image's env (2026-07-25 security audit, F-5).
+      NODE_ENV: production
+      VIRTUAL_HOST: ioan.dev
+      # A longer prefix than the web tier's, which is the whole routing rule.
+      VIRTUAL_PATH: /glu/api
+      VIRTUAL_PORT: "4000"
+    # NO published port — nginx-proxy routes /glu/api/* here.
+    healthcheck:
+      # The router mounts at /glu/api, so a probe on a bare /healthz 404s —
+      # the same trap the web tier's basePath sets.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4000/glu/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+
+volumes:
+  certs:
+  vhost:
+  html:
+  acme:

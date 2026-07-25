@@ -1,0 +1,35 @@
+/* Chrome-token styled (ADR 15). Shape comes from `--glu-control-radius`, so the
+   chips are rounded in Studio Quiet, square in Instrument and pills in Poster
+   without a single per-direction rule here. */
+
+.chip :global(.mantine-Chip-label) {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding-inline: 18px;
+  border-radius: var(--glu-control-radius);
+  border: var(--glu-border);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.chip :global(.mantine-Chip-label[data-checked]) {
+  background: var(--glu-accent);
+  border-color: var(--glu-accent);
+  color: var(--glu-on-accent);
+}
+
+.chip :global(.mantine-Chip-iconWrapper) {
+  display: none;
+}
+
+.legend {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-family: var(--glu-font-mono);
+  color: var(--glu-muted);
+}

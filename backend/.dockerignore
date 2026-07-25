@@ -1,0 +1,12 @@
+# Build context is this package (ADR 22), so these are package-relative.
+node_modules
+dist
+# Test + tooling surface the image never needs. tsconfig already excludes the
+# tests from emit; keeping them out of the context keeps the layer honest too.
+*.test.ts
+vitest.config.ts
+eslint.config.mjs
+justfile
+Dockerfile
+.dockerignore
+.env*

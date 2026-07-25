@@ -1,0 +1,80 @@
+.frame {
+  container-type: size;
+  container-name: clock;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--glu-radius-card, 20px);
+  background: var(--clk-bg);
+  color: var(--clk-ink);
+  /* The blend-mode designs need their own stacking context, or their text
+     blends against the page ADR 08 paints behind them. */
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--glu-font-sans), system-ui, sans-serif;
+}
+
+/* Shared building blocks. Sizes are container-relative (`cqmin`) so every design
+   holds its layout from a half-screen slot to a full mobile viewport. */
+
+.center {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4cqmin;
+}
+
+.pad {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 7cqmin;
+  display: flex;
+  flex-direction: column;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.label {
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  color: var(--clk-muted);
+  letter-spacing: 0.3em;
+  font-size: 3cqmin;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.blendText {
+  mix-blend-mode: difference;
+  color: #fff;
+}
+
+/* The finished state is visually distinct on every design without per-design
+   artwork: the ink dims to the accent and the label changes copy (ADR 07). */
+.frame[data-state="finished"] .label {
+  color: var(--clk-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

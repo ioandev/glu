@@ -1,0 +1,103 @@
+/* ADR 02's layout contract, amended by ADR 08 below `sm`, painted with ADR 15's
+   chrome tokens. `dvh`, not `vh` — tablet browser chrome makes 100vh overflow,
+   and on mobile the first viewport is *meant* to resize as chrome collapses. */
+
+.shell {
+  /* Below `sm` the page scrolls (ADR 08 supersedes ADR 02 here). */
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    "timer"
+    "reserved"
+    "toggles";
+  background: var(--glu-page-bg);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-font-sans), system-ui, sans-serif;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .shell {
+    /* At/above `sm` the ADR 02 contract is unchanged: no page scroll. */
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      "timer reserved"
+      "timer toggles";
+  }
+}
+
+.timerArea {
+  grid-area: timer;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Below `sm` the clock owns the first full viewport; everything else stacks. */
+.clockSlot {
+  height: 100dvh;
+  min-height: 0;
+  padding: var(--mantine-spacing-md);
+  box-sizing: border-box;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .clockSlot {
+    height: auto;
+    flex: 1 1 auto;
+  }
+}
+
+.presets,
+.controls {
+  padding: var(--mantine-spacing-md);
+  display: flex;
+  justify-content: center;
+}
+
+.presets {
+  padding-bottom: 0;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  /* Tablet reads presets → clock → transport (UI.md); the phone reads
+     clock-first, which is why DOM order is the phone order. */
+  .presets {
+    order: -1;
+    padding: var(--mantine-spacing-md) var(--mantine-spacing-md) 0;
+  }
+}
+
+/* The Todoist region. Above `sm` it is the reserved top-right quadrant; below
+   `sm` it joins the stack between the timer controls and the environment
+   toggles (ADR 08's mobile order, ADR 11's placement). */
+.reservedArea {
+  grid-area: reserved;
+  min-height: 0;
+  padding: var(--mantine-spacing-md);
+  display: block;
+}
+
+.togglesArea {
+  grid-area: toggles;
+  padding: var(--mantine-spacing-md);
+}
+
+/* ADR 14's undo bar floats bottom-centre; while it is up the page reserves
+   room so the bar cannot sit on top of anything pressable. */
+:global(html[data-glu-undo-bar]) .togglesArea {
+  padding-bottom: 84px;
+}
+
+.cornerToggle {
+  position: fixed;
+  top: var(--mantine-spacing-sm);
+  right: var(--mantine-spacing-sm);
+  z-index: 200;
+}

@@ -1,0 +1,62 @@
+name: CI
+
+# Pre-merge validation for PRs and feature branches. `main` is intentionally
+# excluded — pushes to main are validated + published by publish.yml, which runs
+# this same suite as its gate, so we don't double-run (ADR 16).
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+# Newer pushes to the same ref cancel in-flight runs. (A feature branch with an
+# open PR can still run twice — once for the push, once for the pull_request
+# event — which is the usual GitHub trade-off.)
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: nothing here writes to the repo, and the reusable suite
+# called below inherits this. Publish elevates per-job instead (ADR 16).
+permissions:
+  contents: read
+
+jobs:
+  # The full test suite (single source of truth in tests.yml).
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  # Validate the image builds (no push) so a broken Dockerfile cannot merge.
+  # Both tiers, each built from its own package context — every package owns its
+  # Dockerfile since ADR 22, so `context` alone picks the right one.
+  #
+  # Deliberately single-arch (amd64) even though publish.yml is multi-arch since
+  # the 2026-07-25 amendment: doubling every PR to catch an arm64-only Dockerfile
+  # break is the wrong trade on a repo whose Dockerfiles are arch-agnostic
+  # (node:24-alpine, no native addons). zantiflow makes the same call for the
+  # same reason. The accepted risk is that such a break surfaces at publish
+  # rather than at review — where `merge` still refuses to tag anything.
+  # The gha cache scope matches publish.yml's amd64 leg, so the two share layers.
+  image-build:
+    needs: tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: web
+          - name: api
+            context: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the ${{ matrix.name }} image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: false
+          load: false
+          tags: glu-${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}-linux-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-linux-amd64

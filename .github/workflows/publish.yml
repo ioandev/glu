@@ -1,0 +1,286 @@
+name: Publish
+
+# Build + push both tiers to GHCR, tests-gated and all-or-nothing, then deploy.
+#
+# Triggers:
+#   push to main             → continuous dev image: :edge (moving) + :sha-<short> (immutable)
+#   workflow_dispatch        → same, for the manual go-live run
+#   GitHub Release published → versioned: :X.Y.Z + :X.Y (+ :latest iff highest stable),
+#                              or :X.Y.Z-rc.N + :next for a pre-release Release
+#
+# Flow: `tests` → `build` (each tier × platform, pushes layers BY DIGEST, no
+# tags) → `merge` (assembles the multi-arch manifest and applies the human
+# tags) → `deploy` → `smoke`. Nothing is tagged or visible unless every test AND
+# every per-platform build succeeded, so a single failure publishes nothing.
+#
+# **Phase B of ADR 16 is NOT YET ACTIVATED**: the `push` trigger stays commented
+# until the server is provisioned (deploy/SERVER.md) and the three SSH secrets
+# are set. To activate, uncomment it. The `release` trigger is live because a
+# Release only ever *publishes* — `deploy` is skipped for release events, so it
+# cannot touch the server (see the deploy job's `if`).
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  # push:
+  #   branches: [main]
+
+concurrency:
+  # Deploys are serialised — never let two runs race the same server. In-flight
+  # runs are NOT cancelled, for either event: a half-finished deploy is worse
+  # than a slow one, and a release must never be cancelled mid-publish.
+  # (zantiflow cancels superseded main builds; it has no deploy stage to guard.)
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least privilege by default; the two jobs that push to GHCR elevate themselves.
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  # Two tiers since ADR 22: ...-web (Next.js app) and ...-api (Express proxy).
+  IMAGE_BASE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # Nothing is built, pushed or deployed unless the same suite ci.yml runs is
+  # green — one definition of "the tests" (ADR 16).
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  # Each tier × platform on a NATIVE runner (no QEMU): amd64 on x86, arm64 on
+  # GitHub's hosted Arm runners (ubuntu-24.04-arm — free for public repos; needs
+  # a plan/label change if `ioandev/glu` is ever made private). Layers are pushed
+  # BY DIGEST — untagged, so nothing is user-visible yet and `merge` decides
+  # whether this run publishes at all. fail-fast: false so every leg reports.
+  build:
+    needs: tests
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      # GHCR authenticates with the built-in token — no extra secret.
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [web, api]
+        platform: [linux/amd64, linux/arm64]
+        include:
+          # Each package is its own build context (ADR 22) — `context` alone
+          # selects the Dockerfile, so there is no `file:` expression.
+          - tier: web
+            context: web
+          - tier: api
+            context: backend
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Compute platform pair
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels only here (tags are applied by `merge`): this stamps the OCI
+      # annotations — source repo, revision, created — so a GHCR package links
+      # back to the commit that built it instead of being an anonymous blob.
+      - name: Labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}-${{ matrix.tier }}
+
+      - name: Build & push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE_BASE }}-${{ matrix.tier }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.tier }}-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.tier }}-${{ env.PLATFORM_PAIR }}
+          # Without this, buildkit attaches an attestation manifest to every
+          # tag, which clutters GHCR and muddies `imagetools inspect` for no
+          # gain on an image with exactly one consumer.
+          provenance: false
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.tier }}-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Promote: runs only if EVERY build leg (both tiers × both platforms)
+  # succeeded. Assembles each tier's per-platform digests into one multi-arch
+  # manifest and applies the human tags — the moment images become visible.
+  # Per-tier so metadata-action runs once per image.
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      # Matrix legs overwrite each other's job outputs, but both derive the
+      # same value from GITHUB_SHA, so this is unambiguous whichever leg
+      # reports it last. Computed rather than taken from metadata-action's
+      # `version`, which changes meaning per event (:edge on a push, the semver
+      # on a release) — `deploy` always wants the immutable commit tag.
+      tag: ${{ steps.pin.outputs.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [web, api]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need every tag for the "highest stable release?" check
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.tier }}-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute deploy pin
+        id: pin
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # :latest must track the newest STABLE release only — never a pre-release,
+      # never a backport (a v1.5.1 Release published while v2.x exists).
+      # GitHub's own prerelease flag handles the first; a git-tag version-sort
+      # handles the second.
+      - name: Is this the highest stable release?
+        id: release
+        if: github.event_name == 'release'
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            echo "is_latest=false" >> "$GITHUB_OUTPUT" # pre-release → :next, never :latest
+          else
+            highest="$(git tag --list 'v*' | awk '!/-/' | sort -V | tail -n1)"
+            if [ "$tag" = "$highest" ]; then
+              echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_latest=false" >> "$GITHUB_OUTPUT" # older line / backport → do NOT move :latest
+            fi
+            echo "tag=$tag highest_stable=$highest" >&2
+          fi
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}-${{ matrix.tier }}
+          flavor: |
+            latest=false
+          tags: |
+            # release version, from the Release's tag (metadata-action skips :X.Y for pre-releases):
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # continuous, from a main push / manual dispatch:
+            type=edge,branch=main
+            type=sha,prefix=sha-,format=short
+            # moving pre-release channel (a Release flagged "pre-release"):
+            type=raw,value=next,enable=${{ github.event_name == 'release' && github.event.release.prerelease }}
+            # :latest ONLY for the highest stable release (computed above):
+            type=raw,value=latest,enable=${{ steps.release.outputs.is_latest == 'true' }}
+
+      - name: Create manifest list & push tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE_BASE }}-${{ matrix.tier }}@sha256:%s ' *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect ${{ env.IMAGE_BASE }}-${{ matrix.tier }}:${{ steps.meta.outputs.version }}
+
+  # Continuous deploy from main stays the model (ADR 16) — a Release publishes
+  # channels, it does not move the server. Deploying a backport Release would
+  # otherwise walk prod backwards.
+  deploy:
+    needs: merge
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Pull and restart on ioan.dev
+        uses: appleboy/ssh-action@v1
+        env:
+          # The immutable tag this run just built and tested. compose falls back
+          # to `:edge` when it is unset, so a manual `docker compose up -d` on
+          # the box still works — but the automated deploy always converges on
+          # the exact artifact the smoke job is about to check, and `docker
+          # compose config` on the server shows which one that is.
+          GLU_TAG: ${{ needs.merge.outputs.tag }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: GLU_TAG
+          script: |
+            set -euo pipefail
+            cd /srv/glu
+            export GLU_TAG
+            docker compose pull
+            docker compose up -d
+
+  # The promise ADR 09 made: the same suite, pointed at production.
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    # The e2e suite lives in the web package (ADR 09).
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Only the @smoke-tagged subset, and only one browser: running all four
+      # projects against prod on every push is minutes of CI for no added
+      # confidence (ADR 16). The full matrix stays the pre-merge gate.
+      - name: Smoke the deployed site
+        env:
+          E2E_BASE_URL: https://ioan.dev/glu
+        run: npx playwright test --project=chromium --grep @smoke
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: smoke-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7

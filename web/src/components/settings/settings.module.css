@@ -1,0 +1,41 @@
+.sections {
+  min-height: 40vh;
+}
+
+.sectionTitle {
+  font-family: var(--glu-label-family);
+  font-weight: var(--glu-label-weight);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-muted);
+  font-size: var(--glu-label-size);
+}
+
+.divider {
+  border-color: var(--glu-border-color);
+  margin: 8px 0 12px;
+}
+
+.row {
+  min-height: 44px;
+  padding: 4px 0;
+}
+
+.action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-size: 14px;
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.futureNote {
+  margin-top: auto;
+}

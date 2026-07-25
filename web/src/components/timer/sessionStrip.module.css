@@ -1,0 +1,70 @@
+/* Dot shape is a chrome axis (circle in Studio Quiet and Poster, square in
+   Instrument) — it comes from the token, never from a per-direction rule. */
+
+.dot {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--glu-dot-radius);
+  background: var(--glu-accent);
+}
+
+.overflow,
+.count {
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-muted);
+}
+
+.newDayButton {
+  min-height: 44px;
+  border-radius: var(--glu-control-radius);
+  border: var(--glu-border);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+}
+
+.confirm {
+  background: var(--glu-surface-strong);
+  border: var(--glu-border);
+  border-radius: var(--glu-radius-card);
+  box-shadow: var(--glu-shadow);
+  color: var(--glu-page-fg);
+}
+
+.confirmButton {
+  min-height: 44px;
+  min-width: 88px;
+  border-radius: var(--glu-control-radius);
+}
+
+.showSessionSwitch :global(.mantine-Switch-body) {
+  min-height: 44px;
+  align-items: center;
+}
+
+.showSessionSwitch :global(.mantine-Switch-label) {
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  color: var(--glu-muted);
+}
+
+.showSessionSwitch :global(.mantine-Switch-track) {
+  cursor: pointer;
+  position: relative;
+}
+
+/* The visual pill stays 24px; the *hit* area is expanded to clear the 44px
+   touch floor without distorting the control. */
+.showSessionSwitch :global(.mantine-Switch-track)::after {
+  content: "";
+  position: absolute;
+  inset: -11px -6px;
+}

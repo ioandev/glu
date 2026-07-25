@@ -1,0 +1,25 @@
+/* Layer order is the whole coexistence story (ADR 01): Mantine ships its
+   component CSS inside `@layer mantine`, Tailwind's utilities go into
+   `@layer utilities`, and declaring mantine first lets a utility win when both
+   target the same element. Tailwind's preflight is deliberately NOT imported —
+   Mantine owns the base/reset. */
+@layer mantine, theme, utilities;
+
+@import "@mantine/core/styles.layer.css";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+html,
+body {
+  height: 100%;
+}
+
+/* Mantine's default dimmed tone (gray-6) is 3.32:1 on white — below the
+   contrast gate ADR 03 enforces. Remap the token rather than avoiding
+   `c="dimmed"` in components. */
+:root {
+  --mantine-color-dimmed: light-dark(
+    var(--mantine-color-gray-7),
+    var(--mantine-color-gray-5)
+  );
+}
