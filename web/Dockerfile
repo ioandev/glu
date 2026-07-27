@@ -3,7 +3,7 @@
 #   docker build -t glu-web web/
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 # Copy manifests first so the dependency layer survives source-only changes.
 COPY package.json package-lock.json ./
@@ -16,7 +16,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:24-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 # Fixed UID/GID 5330 — matches the host deploy perms for glu-web (server-2-perms),
 # so the container process and its files line up with the server user. Replaces
