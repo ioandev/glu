@@ -1,4 +1,4 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress, unitCount } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -31,6 +31,7 @@ export function Stack({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
   const p = clockProgress(remainingMs, totalMs);
   const units = unitCount(p.totalSeconds);
   const spent = Math.round(p.elapsedFraction * units);

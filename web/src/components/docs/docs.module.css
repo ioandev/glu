@@ -12,4 +12,17 @@
   max-width: 72ch;
   margin: 0 auto;
   padding-bottom: 8px;
+  /* Same reason as the document route: the manual is quotable text, so the
+     app-wide `user-select: none` is lifted for the body of the modal. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ADR 44: shown while the modal fetches the reader's language of the manual.
+   The route never renders this — it resolves the same module on the server. */
+.loading {
+  margin: 0;
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
 }

@@ -43,6 +43,13 @@
   build time — no `fonts.googleapis.com` request at runtime, verified against
   both build outputs.
 
+> **Amended 2026-07-26 by [ADR 42](42-second-clock-set.md) and
+> [ADR 45](45-third-clock-set.md).** The roster is no longer eighteen: a second
+> sheet of twenty-two designs and a third of forty-six were implemented under
+> the same contract. Every "18" in this document is a record of what the first
+> set was, not a count of what ships — the count is `CLOCK_COUNT`, derived from
+> the registry.
+
 ## Context
 
 ADR 02 deferred the clock face to a "future ADR: custom clock UI" and shipped a

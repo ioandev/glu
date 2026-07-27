@@ -76,3 +76,63 @@ describe("which toggles the comment reports (ADR 27)", () => {
     expect(previewTimeComment(5, SAMPLE_ENVIRONMENT)).not.toBe(previewTimeComment(5, []));
   });
 });
+
+/**
+ * ADR 44, and the **twin of `backend/timeComments.test.ts`'s locale block.**
+ *
+ * These literals are pinned deliberately. The two packages compose this
+ * sentence from separate copies of the same vocabulary — ADR 22 forbids sharing
+ * a module between them — so the only thing standing between what Settings
+ * previews and what actually lands in the user's Todoist task is that both
+ * suites assert the same strings. Change a word in one and the other fails.
+ */
+describe("the preview speaks the reader's language (ADR 44)", () => {
+  it("composes the plain sentence in every locale", () => {
+    expect(previewTimeComment(25, [], "en")).toBe("[25m] You spent 25 minutes on this");
+    expect(previewTimeComment(25, [], "es")).toBe("[25m] Dedicaste 25 minutos a esto");
+    expect(previewTimeComment(25, [], "fr")).toBe("[25m] Vous avez passé 25 minutes là-dessus");
+    expect(previewTimeComment(25, [], "pt")).toBe("[25m] Dedicaste 25 minutos a isto");
+    expect(previewTimeComment(25, [], "de")).toBe("[25m] Du hast 25 Minuten daran gearbeitet");
+    expect(previewTimeComment(25, [], "zh-Hans")).toBe("[25m] 你在这件事上花了 25 分钟");
+  });
+
+  it("gets the singular right where the language has one", () => {
+    expect(previewTimeComment(1, [], "en")).toBe("[1m] You spent 1 minute on this");
+    expect(previewTimeComment(1, [], "es")).toBe("[1m] Dedicaste 1 minuto a esto");
+    expect(previewTimeComment(1, [], "fr")).toBe("[1m] Vous avez passé 1 minute là-dessus");
+    expect(previewTimeComment(1, [], "de")).toBe("[1m] Du hast 1 Minute daran gearbeitet");
+    expect(previewTimeComment(1, [], "zh-Hans")).toBe("[1m] 你在这件事上花了 1 分钟");
+  });
+
+  it("builds the environment clause with each language's own list grammar", () => {
+    const keys: EnvironmentKey[] = ["music", "podcast", "headphones"];
+    expect(previewTimeComment(5, keys, "en")).toBe(
+      "[5m] You spent 5 minutes on this — with music and a podcast, on headphones",
+    );
+    expect(previewTimeComment(5, keys, "es")).toBe(
+      "[5m] Dedicaste 5 minutos a esto — con música y un pódcast, con auriculares",
+    );
+    expect(previewTimeComment(5, keys, "fr")).toBe(
+      "[5m] Vous avez passé 5 minutes là-dessus — avec de la musique et un podcast, au casque",
+    );
+    expect(previewTimeComment(5, keys, "de")).toBe(
+      "[5m] Du hast 5 Minuten daran gearbeitet — mit Musik und einem Podcast, mit Kopfhörern",
+    );
+    expect(previewTimeComment(5, keys, "zh-Hans")).toBe(
+      "[5m] 你在这件事上花了 5 分钟 — 伴随音乐和播客，戴着耳机",
+    );
+  });
+
+  it("keeps silence exclusive in every language", () => {
+    expect(previewTimeComment(5, ["silence"], "de")).toBe(
+      "[5m] Du hast 5 Minuten daran gearbeitet — in Stille",
+    );
+    expect(previewTimeComment(5, ["silence", "tv"], "de")).toBe(
+      previewTimeComment(5, ["tv"], "de"),
+    );
+  });
+
+  it("defaults to English, so a caller with no locale is unchanged", () => {
+    expect(previewTimeComment(5, ["music"])).toBe(previewTimeComment(5, ["music"], "en"));
+  });
+});

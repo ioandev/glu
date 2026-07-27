@@ -68,7 +68,7 @@ export const PosterPhone: Story = phone("poster");
  * The three demo pairings from the mockups: the page must read as *both* the
  * clock's colour family and the chrome direction (ADR 15), and every piece of
  * chrome must stay legible on it (ADR 08's chrome-on-palette duty). The a11y
- * addon is the gate; the token-level sweep over all 18 palettes lives in
+ * addon is the gate; the token-level sweep over every clock palette lives in
  * `src/chrome/chrome.test.ts`.
  */
 export const StudioQuietOnTide: Story = {

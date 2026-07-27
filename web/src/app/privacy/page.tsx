@@ -7,7 +7,9 @@ import { pageMetadata } from "@/lib/siteMetadata";
  * `" — GLU"` this used to append by hand is the root layout's template now
  * (ADR 30).
  */
-export const metadata: Metadata = pageMetadata("/privacy");
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("/privacy");
+}
 
 /**
  * `/glu/privacy` (ADR 26). Deliberately outside `AppShell`: the shell owns the

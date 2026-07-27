@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 /**
  * The dev-only proxy to the Express API (ADR 11 mounts it at `/glu/api`).
@@ -64,4 +65,14 @@ const nextConfig: NextConfig = {
   ...(process.env.NODE_ENV === "development" ? { rewrites: devApiRewrites } : {}),
 };
 
-export default nextConfig;
+/**
+ * next-intl's plugin (ADR 44). It does one thing: alias `next-intl/config` to
+ * `src/i18n/request.ts` so the server APIs can find the request configuration.
+ *
+ * It adds **no routing** — GLU has no `[locale]` segment and no next-intl
+ * middleware, so this composes with `basePath` and `output: "standalone"`
+ * without either knowing about the other. Keep it that way: turning on
+ * next-intl's routing would put a second CSP-unaware redirect layer in front
+ * of `proxy.ts`, which is the one file that must see every request.
+ */
+export default createNextIntlPlugin("./src/i18n/request.ts")(nextConfig);

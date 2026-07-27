@@ -2,6 +2,7 @@
 
 import { Text, UnstyledButton } from "@mantine/core";
 import { IconTarget } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { TaskCircle } from "./TaskCircle";
 import type { UiTask } from "./types";
 import classes from "./todoist.module.css";
@@ -31,6 +32,8 @@ export function TaskCard({
   completing,
   failed,
 }: TaskCardProps) {
+  const t = useTranslations("todoist");
+
   return (
     <div
       className={classes.card}
@@ -49,7 +52,7 @@ export function TaskCard({
         <UnstyledButton
           className={classes.cardBody}
           onClick={() => onOpen(task)}
-          aria-label={`Open “${task.title}”`}
+          aria-label={t("openTask", { title: task.title })}
         >
           <span className={classes.cardTitle}>{task.title}</span>
           {task.description ? (
@@ -67,14 +70,14 @@ export function TaskCard({
 
       {failed ? (
         <Text component="span" className={classes.cardError} data-testid="task-card-error">
-          Could not complete
+          {t("couldNotComplete")}
         </Text>
       ) : null}
 
       {onFocus ? (
         <UnstyledButton
           className={classes.focusButton}
-          aria-label={`Focus “${task.title}”`}
+          aria-label={t("focusTask", { title: task.title })}
           onClick={() => onFocus(task)}
         >
           <IconTarget size={18} />

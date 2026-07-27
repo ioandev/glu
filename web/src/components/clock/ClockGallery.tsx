@@ -29,7 +29,7 @@ export function swipeIntent(dx: number, dy: number): -1 | 0 | 1 {
 /**
  * The clock slot *is* the gallery (ADR 08): swipe or tap the flanking chevrons
  * to move through the registry in order, wrapping at the ends. Only the active
- * clock renders — 18 mounted clocks means 18 ticking subtrees and Aurora's blur
+ * clock renders — a mounted roster means one ticking subtree per design and Aurora's blur
  * layers running off-screen.
  *
  * ADR 25 carves the one bounded exception: for the 420 ms of a flip the slot

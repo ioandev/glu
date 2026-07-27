@@ -78,6 +78,12 @@ browsers:
 icons:
     npm run icons
 
+# The full report first (informational, never fails the recipe), then the
+# gate CI enforces: production deps, high or critical (ADR 38).
+audit:
+    -npm audit
+    npm audit --omit=dev --audit-level=high
+
 # The context is this directory — the Dockerfile and .dockerignore live here
 # alongside the sources they copy (ADR 22).
 

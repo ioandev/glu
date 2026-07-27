@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
+import { withStoreState } from "@/stories/storeDecorator";
 import type { TodoistListState } from "./useTodoistList";
 import { TaskList } from "./TaskList";
 import type { TodoistSection, TodoistSource, UiTask } from "./types";
@@ -12,7 +13,15 @@ const task = (
   uiPriority: 1 | 2 | 3 | 4,
   sectionId: string | null = null,
   description = "",
-): UiTask => ({ id, title, description, uiPriority, sectionId, order: Number(id) });
+): UiTask => ({
+  id,
+  title,
+  description,
+  uiPriority,
+  projectId: null,
+  sectionId,
+  order: Number(id),
+});
 
 const sections: TodoistSection[] = [
   { id: "s1", name: "Today", order: 1 },
@@ -23,6 +32,7 @@ const list = (patch: Partial<TodoistListState> = {}): TodoistListState => ({
   phase: "ready",
   tasks: [],
   sections: [],
+  projects: [],
   truncated: false,
   cap: 200,
   errorMessage: null,
@@ -133,7 +143,18 @@ export const Truncated: Story = {
   },
 };
 
-/** Filters are user-authored code — Todoist's own words, not "went wrong". */
+/**
+ * A broken filter reports in the reader's own language (ADR 44).
+ *
+ * This **reverses** ADR 12's intent, which was to show a filter's author
+ * Todoist's own words on the grounds that they wrote the query. That intent was
+ * already not being met: `apiFetch` discards the response body, so the string
+ * reaching this component was `ApiError.message` — the internal
+ * `GET /todoist/tasks?… failed` — and not Todoist's diagnosis at all. Localised
+ * text is both translatable and more honest than a route path. Recovering the
+ * upstream diagnosis would mean parsing the backend's `{ error, message }` body,
+ * which is a separate change.
+ */
 export const FilterError: Story = {
   args: {
     source: { type: "filter", id: "f1", name: "Broken", query: "nonsense!!" },
@@ -141,7 +162,7 @@ export const FilterError: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByTestId("task-error")).toHaveTextContent(
-      "Invalid query",
+      "Could not reach Todoist.",
     );
   },
 };
@@ -151,5 +172,37 @@ export const SourceGoneUpstream: Story = {
   args: { list: list({ gone: true, phase: "idle" }) },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByTestId("task-hint")).toBeVisible();
+  },
+};
+
+/**
+ * ADR 39: a section past the ceiling. The overflow line is the section's, not
+ * the list's — ADR 12's `Showing first 200` is a different statement and stays
+ * where it is.
+ */
+export const SectionCapped: Story = {
+  decorators: [withStoreState({ sectionItemLimit: 10 })],
+  args: {
+    // The real panel always wires these; without them a long list is a
+    // scrollable region with nothing focusable in it, which the a11y gate
+    // fails — correctly.
+    onOpen: () => {},
+    onFocus: () => {},
+    list: list({
+      sections,
+      tasks: Array.from({ length: 14 }, (_, i) => task(String(i), `Task ${i}`, 4, "s1")),
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByTestId("task-card")).toHaveLength(10);
+
+    const more = canvas.getByRole("button", { name: "+4 more" });
+    await expect(more.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+
+    // One tap gets the tail back, for this visit only.
+    await userEvent.click(more);
+    await expect(canvas.getAllByTestId("task-card")).toHaveLength(14);
+    await expect(canvas.queryByRole("button", { name: /more$/ })).toBeNull();
   },
 };

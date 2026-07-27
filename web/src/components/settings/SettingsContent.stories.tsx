@@ -114,6 +114,48 @@ export const LogOutSyncsEverySurface: Story = {
 };
 
 /**
+ * The Alerts section (ADR 40): nine sounds and a length. The one section you
+ * are meant to *hear* — every tap previews, so the play spies below stand in
+ * for ears.
+ */
+export const AlertsSection: Story = {
+  decorators: [withAuth("out")],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const grid = canvas.getByRole("radiogroup", { name: "Sound" });
+    const ladder = canvas.getByRole("radiogroup", { name: "How long it plays" });
+
+    // Nine sounds, and the defaults are ADR 18's shipped behaviour.
+    await expect(within(grid).getAllByRole("radio")).toHaveLength(9);
+    await expect(canvas.getByRole("radio", { name: "Chime" })).toBeChecked();
+    await expect(canvas.getByRole("radio", { name: "Once" })).toBeChecked();
+
+    // Choosing writes the blob…
+    await userEvent.click(canvas.getByRole("radio", { name: "Bell" }));
+    await expect(useGluStore.getState().alertSoundId).toBe("bell");
+    // …and marks the button as playing, because choosing is also hearing.
+    await expect(canvas.getByTestId("alert-sound-bell")).toHaveAttribute("data-playing", "true");
+
+    // Tapping the playing sound stops it rather than replaying it.
+    await userEvent.click(canvas.getByRole("radio", { name: "Bell" }));
+    await expect(canvas.getByTestId("alert-sound-bell")).toHaveAttribute("data-playing", "false");
+    await expect(useGluStore.getState().alertSoundId).toBe("bell");
+
+    await userEvent.click(canvas.getByRole("radio", { name: "10 s" }));
+    await expect(useGluStore.getState().alertDurationSeconds).toBe(10);
+
+    // Every control in the modal is a touch target (ADR 19's 44 px floor).
+    for (const button of within(grid).getAllByRole("radio")) {
+      await expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+    for (const radio of within(ladder).getAllByRole("radio")) {
+      const target = (radio as HTMLInputElement).labels![0];
+      await expect(target.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+  },
+};
+
+/**
  * The Time comments section (ADR 27): one switch, and the two sample sentences
  * that make it self-explanatory. The previews are composed from the live
  * environment toggles, so this story seeds them.
@@ -247,5 +289,30 @@ export const TimeCommentsAtHalfTablet: Story = {
     );
     // It wraps; it does not push the modal sideways.
     await expect(on.scrollWidth).toBeLessThanOrEqual(on.clientWidth + 1);
+  },
+};
+
+/** ADR 39: the ceiling ladder — five rungs, All by default, All is not "0". */
+export const SectionItemLimitLadder: Story = {
+  decorators: [withAuth("out")],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ladder = canvas.getByRole("radiogroup", { name: "Limit the items in a section to" });
+
+    // Default is All: nobody who never opens the row loses a row from a list.
+    await expect(canvas.getByRole("radio", { name: "All" })).toBeChecked();
+
+    // Anchored regexes: "10" is a substring of "100".
+    await userEvent.click(within(ladder).getByRole("radio", { name: /^10$/ }));
+    await expect(useGluStore.getState().sectionItemLimit).toBe(10);
+    await expect(canvas.getByRole("radio", { name: "All" })).not.toBeChecked();
+
+    await userEvent.click(within(ladder).getByRole("radio", { name: /^100$/ }));
+    await expect(useGluStore.getState().sectionItemLimit).toBe(100);
+
+    for (const radio of within(ladder).getAllByRole("radio")) {
+      const target = (radio as HTMLInputElement).labels![0];
+      await expect(target.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
   },
 };

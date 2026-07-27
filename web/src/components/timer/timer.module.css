@@ -31,6 +31,14 @@
   text-transform: var(--glu-label-transform);
 }
 
+/* The primary button relabels itself Start → Pause → Resume (ADR 37); a fixed
+   width keeps Stop from sliding sideways every time it does. */
+.transportPrimary {
+  /* Wide enough that the longest label ("Resume", ~140.2px at `size="xl"`)
+     still sits on the floor rather than pushing past it. */
+  min-width: 152px;
+}
+
 .transportButton[data-variant="default"] {
   border: var(--glu-border);
   background: var(--glu-surface-strong);

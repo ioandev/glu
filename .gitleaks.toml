@@ -1,0 +1,15 @@
+# Gitleaks config (ADR 38). Default ruleset, plus the ONE deliberate
+# allowlist entry. Every future entry needs a comment saying why it is safe —
+# an allowlist that grows casually is how secret scanning dies.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Deliberately committed non-secrets"
+regexes = [
+  # ADR 11's dev-only SESSION_SECRET (backend/config.ts). Localhost-only by
+  # construction: backend/config.ts refuses to start with it when
+  # PUBLIC_ORIGIN is non-local, so it seals nothing anyone can reach.
+  '''glu-development-only-session-secret-not-for-production''',
+]

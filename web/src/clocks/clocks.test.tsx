@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { intlWrapper } from "@/test/intl";
 import { render, cleanup } from "@testing-library/react";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { CLOCKS, CLOCK_BY_ID, DEFAULT_CLOCK_ID, resolveClock } from "./registry";
+import { CLOCKS, CLOCK_BY_ID, CLOCK_COUNT, DEFAULT_CLOCK_ID, resolveClock } from "./registry";
 import { CLOCK_THEME_BY_ID, EXTREME_PALETTE_IDS } from "./themes";
 import { clockProgress, unitCount } from "./progress";
 import { formatMmSs, MINUTE, SECOND } from "@/lib/time";
@@ -17,9 +18,23 @@ const baseProps: ClockProps = {
 };
 
 describe("clock registry (ADR 07)", () => {
-  it("has exactly 18 entries with unique ids", () => {
-    expect(CLOCKS).toHaveLength(18);
-    expect(new Set(CLOCKS.map((c) => c.id)).size).toBe(18);
+  /**
+   * The roster's size is derived, never asserted against a literal (ADR 42):
+   * the count used to be written into the tests, the stories, the docs page and
+   * four comments, and every one of them went stale the day a design landed.
+   * What is worth enforcing is **completeness** — every design module in the
+   * folder is registered, and no id is claimed twice.
+   */
+  it("registers every design module exactly once, with unique ids", () => {
+    const modules = readdirSync(join(process.cwd(), "src/clocks/designs")).filter((f) =>
+      f.endsWith(".tsx"),
+    );
+    expect(CLOCKS).toHaveLength(modules.length);
+    expect(CLOCK_COUNT).toBe(CLOCKS.length);
+    expect(new Set(CLOCKS.map((c) => c.id)).size).toBe(CLOCK_COUNT);
+    expect(new Set(CLOCKS.map((c) => c.component.name))).toEqual(
+      new Set(modules.map((f) => f.replace(/\.tsx$/, ""))),
+    );
   });
 
   it("gives every entry a component and both scheme palettes", () => {
@@ -37,22 +52,18 @@ describe("clock registry (ADR 07)", () => {
     }
   });
 
-  it("matches the inventory table's capability flags", () => {
-    expect(CLOCKS.filter((c) => c.showsSession)).toHaveLength(12);
+  it("keeps the capability flags honest", () => {
+    // Terminal is still the only design that displays the run's total.
     expect(CLOCKS.filter((c) => c.showsTotal).map((c) => c.id)).toEqual(["terminal"]);
-    // The inventory *table* lists 7 natively-dark designs (1b, 1d, 1e, 2a, 2c,
-    // 2d, 2h); the prose beneath it says 6. The table wins — see the ADR's
-    // deviation note.
-    expect(CLOCKS.filter((c) => c.nativeScheme === "dark").map((c) => c.id)).toEqual([
-      "meridian",
-      "aurora",
-      "mono",
-      "eclipse",
-      "terminal",
-      "sunset",
-      "radar",
-    ]);
-    expect(CLOCKS.filter((c) => c.nativeScheme === "light")).toHaveLength(11);
+    // Both native schemes are represented — the roster is not a light-only or
+    // dark-only set of mockups.
+    for (const scheme of ["light", "dark"] as const) {
+      expect(CLOCKS.some((c) => c.nativeScheme === scheme), scheme).toBe(true);
+    }
+    // Session display is a per-design decision — the flag has to be exercised
+    // both ways, or it was not really a decision.
+    expect(CLOCKS.some((c) => c.showsSession)).toBe(true);
+    expect(CLOCKS.some((c) => !c.showsSession)).toBe(true);
   });
 
   it("falls back to Halo for an unknown id", () => {
@@ -63,7 +74,7 @@ describe("clock registry (ADR 07)", () => {
   });
 
   it("exports one palette per clock for the chrome layer", () => {
-    expect(Object.keys(CLOCK_THEME_BY_ID)).toHaveLength(18);
+    expect(Object.keys(CLOCK_THEME_BY_ID)).toHaveLength(CLOCK_COUNT);
     for (const id of EXTREME_PALETTE_IDS) expect(CLOCK_THEME_BY_ID[id]).toBeDefined();
   });
 });
@@ -114,7 +125,7 @@ describe("every clock renders (ADR 07)", () => {
         // throw — or divide by a rounded-away zero — mid-second.
         for (const remaining of [0, 1, 500, Math.floor(total / 2) + 499, total]) {
           expect(() =>
-            render(<Component {...baseProps} remainingMs={remaining} totalMs={total} />),
+            render(<Component {...baseProps} remainingMs={remaining} totalMs={total} />, { wrapper: intlWrapper }),
           ).not.toThrow();
           cleanup();
         }
@@ -126,8 +137,7 @@ describe("every clock renders (ADR 07)", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
       const { container } = render(
-        <Component {...baseProps} remainingMs={754 * SECOND} totalMs={1500 * SECOND} />,
-      );
+        <Component {...baseProps} remainingMs={754 * SECOND} totalMs={1500 * SECOND} />, { wrapper: intlWrapper });
       // Broadside and Field split mm and ss onto separate lines.
       const text = container.textContent ?? "";
       const expected = formatMmSs(754);
@@ -140,10 +150,10 @@ describe("every clock renders (ADR 07)", () => {
     }
   });
 
-  it("hides the session element for all 12 flagged clocks when showSession is off", () => {
+  it("hides the session element on every flagged clock when showSession is off", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
-      const on = render(<Component {...baseProps} session={7} showSession />);
+      const on = render(<Component {...baseProps} session={7} showSession />, { wrapper: intlWrapper });
       const shown = on.queryAllByTestId("clock-session").length > 0;
       expect(shown, `${clock.id} showsSession=${clock.showsSession}`).toBe(clock.showsSession);
       if (shown) {
@@ -153,7 +163,7 @@ describe("every clock renders (ADR 07)", () => {
       }
       cleanup();
 
-      const off = render(<Component {...baseProps} session={7} showSession={false} />);
+      const off = render(<Component {...baseProps} session={7} showSession={false} />, { wrapper: intlWrapper });
       expect(off.queryAllByTestId("clock-session")).toHaveLength(0);
       cleanup();
     }
@@ -163,6 +173,7 @@ describe("every clock renders (ADR 07)", () => {
     const Terminal = CLOCK_BY_ID.terminal.component;
     const { getByTestId } = render(
       <Terminal {...baseProps} totalMs={45 * MINUTE} remainingMs={100 * SECOND} />,
+      { wrapper: intlWrapper },
     );
     expect(getByTestId("clock-total").textContent).toContain("--focus 45m");
   });
@@ -170,9 +181,9 @@ describe("every clock renders (ADR 07)", () => {
   it("is pure: the same props render identical markup twice", () => {
     for (const clock of CLOCKS) {
       const Component = clock.component;
-      const first = render(<Component {...baseProps} />).container.innerHTML;
+      const first = render(<Component {...baseProps} />, { wrapper: intlWrapper }).container.innerHTML;
       cleanup();
-      const second = render(<Component {...baseProps} />).container.innerHTML;
+      const second = render(<Component {...baseProps} />, { wrapper: intlWrapper }).container.innerHTML;
       cleanup();
       expect(second, clock.id).toBe(first);
     }
@@ -186,8 +197,7 @@ describe("every clock renders (ADR 07)", () => {
         [0, (99 * 60 + 59) * SECOND],
       ]) {
         const { container } = render(
-          <Component {...baseProps} remainingMs={remaining} totalMs={total} />,
-        );
+          <Component {...baseProps} remainingMs={remaining} totalMs={total} />, { wrapper: intlWrapper });
         expect(container.firstElementChild).toBeTruthy();
         cleanup();
       }

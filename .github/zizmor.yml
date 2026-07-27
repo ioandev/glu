@@ -1,0 +1,10 @@
+# zizmor config (ADR 38). One relaxation: this repo pins actions by TAG
+# everywhere (ADR 16 house style), so unpinned-uses is set to accept ref-pins
+# instead of demanding commit SHAs. Switching the whole repo to SHA pins is a
+# recorded possible future sweep (ADR 38, Options considered) — do not "fix"
+# individual uses piecemeal.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin

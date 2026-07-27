@@ -7,7 +7,9 @@ import { pageMetadata } from "@/lib/siteMetadata";
  * no `title`: the root layout's `title.default` already *is* this page's
  * title, and one set here would run through the `"%s — GLU"` template.
  */
-export const metadata: Metadata = pageMetadata("/");
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("/");
+}
 
 /**
  * Server component rendering the `'use client'` welcome gate (ADR 31), which

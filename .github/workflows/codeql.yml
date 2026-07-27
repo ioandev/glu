@@ -1,0 +1,45 @@
+name: CodeQL
+
+# Static analysis of first-party TypeScript, both packages (ADR 38).
+# Advanced setup on purpose: the workflow file is repo-owned and reviewable.
+# GitHub's *default setup* must stay OFF in the repo settings — if both are
+# enabled, the upload from this workflow is rejected (see HUMAN-TODO).
+#
+# Deliberately OUTSIDE the ADR 16 gate (tests.yml): a new CodeQL query pack
+# finding an old bug should never block an unrelated deploy.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, off the hour to dodge the load spike GitHub documents.
+    # The cron leg is what catches newly-added queries finding old code.
+    - cron: "31 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Uploading results to the code-scanning tab needs this.
+      security-events: write
+      # Private-repo fallback for the upload API; harmless while public.
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      # One language covers both packages — TS/JS is interpreted, so no build
+      # is needed and `build-mode: none` scans web/ and backend/ as they sit.
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"

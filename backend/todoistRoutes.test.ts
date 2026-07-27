@@ -6,7 +6,10 @@ import { readConfig, type ServerConfig } from "./config";
 import { SESSION_COOKIE, type TokenSet } from "./session";
 import {
   TASK_CAP,
+  buildProjectRanks,
+  compareTasks,
   splitFilterViews,
+  type RawTask,
   toPlainText,
   toUiPriority,
   toUiTask,
@@ -27,6 +30,17 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
+
+/**
+ * ADR 34 made a filter fetch fan out — every view in parallel with `/projects`
+ * for the sort's fourth key — so replies are matched on the URL, never on call
+ * order. Anything the handler does not answer comes back as an empty page.
+ */
+function upstream(reply: (url: string) => unknown) {
+  fetchMock.mockImplementation((input: unknown) =>
+    Promise.resolve(json(reply(String(input)) ?? { results: [], next_cursor: null })),
+  );
+}
 
 async function liveCookie() {
   const tokens: TokenSet = { accessToken: "at", expiresAt: Date.now() + 30 * 60_000 };
@@ -187,8 +201,8 @@ describe("task fetching (ADR 12)", () => {
       .set("Cookie", [await liveCookie()]);
 
     expect(response.body.items).toEqual([
-      { id: "1", title: "First", description: "", uiPriority: 1, sectionId: null, order: 0 },
-      { id: "2", title: "Second", description: "", uiPriority: 4, sectionId: "s1", order: 1 },
+      { id: "1", title: "First", description: "", uiPriority: 1, projectId: null, sectionId: null, order: 0 },
+      { id: "2", title: "Second", description: "", uiPriority: 4, projectId: null, sectionId: "s1", order: 1 },
     ]);
     expect(response.body.truncated).toBe(false);
     expect(String(fetchMock.mock.calls[0][0])).toContain("project_id=p1");
@@ -206,7 +220,12 @@ describe("task fetching (ADR 12)", () => {
     await request(app())
       .get("/glu/api/todoist/tasks?type=filter&id=f1&query=today%20%26%20%40glu")
       .set("Cookie", [cookie]);
-    expect(String(fetchMock.mock.calls[1][0])).toContain("tasks/filter");
+
+    // Each also reads `/projects` for ADR 34's fourth sort key, so the calls
+    // are matched by URL rather than by position.
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => url.includes("tasks/filter"))).toHaveLength(2);
+    expect(urls.filter((url) => url.includes("/projects"))).toHaveLength(2);
   });
 
   it("caps at 200 tasks and says so", async () => {
@@ -243,28 +262,33 @@ describe("task fetching (ADR 12)", () => {
     expect(response.body.message).toContain("failed");
   });
 
-  it("fetches one request per filter view and unions them in view order", async () => {
+  it("fetches one request per filter view and unions them once each", async () => {
     // `p1, p2` upstream means p1 AND p2 — the union is ours to assemble.
-    fetchMock
-      .mockResolvedValueOnce(json({ results: [{ id: "1", content: "One" }], next_cursor: null }))
-      .mockResolvedValueOnce(
-        json({
+    upstream((url) => {
+      if (url.includes("query=%40yolo")) {
+        return { results: [{ id: "1", content: "One", priority: 1 }], next_cursor: null };
+      }
+      if (url.includes("query=p1")) {
+        return {
           results: [
-            { id: "1", content: "One" }, // in both views: kept once, at its first spot
-            { id: "2", content: "Two" },
+            { id: "1", content: "One", priority: 1 }, // in both views, kept once
+            { id: "2", content: "Two", priority: 4 },
           ],
           next_cursor: null,
-        }),
-      );
+        };
+      }
+      return null;
+    });
 
     const response = await request(app())
       .get("/glu/api/todoist/tasks?type=filter&id=f1&query=%40yolo%2C%20p1")
       .set("Cookie", [await liveCookie()]);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("query=%40yolo");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("query=p1");
-    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["1", "2"]);
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => url.includes("query=%40yolo"))).toHaveLength(1);
+    expect(urls.filter((url) => url.includes("query=p1"))).toHaveLength(1);
+    // The union is sorted (ADR 34), so the P1 leads even though it arrived last.
+    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["2", "1"]);
     expect(response.body.truncated).toBe(false);
   });
 
@@ -286,5 +310,136 @@ describe("task fetching (ADR 12)", () => {
       "Today",
       "Later",
     ]);
+  });
+});
+
+describe("filter and label ordering (ADR 34)", () => {
+  /** Only the keys under test differ; everything else ties. */
+  const task = (id: string, extra: Partial<RawTask> = {}): RawTask => ({
+    id,
+    content: id,
+    priority: 1,
+    ...extra,
+  });
+
+  const order = (tasks: RawTask[], ranks?: Map<string, number[]>) =>
+    [...tasks].sort((a, b) => compareTasks(a, b, ranks)).map((t) => t.id);
+
+  it("puts P1 first and P4 last — the one descending key", () => {
+    // API priority is inverted: 4 is the UI's P1.
+    const tasks = [task("p4", { priority: 1 }), task("p1", { priority: 4 }), task("p2", { priority: 3 })];
+    expect(order(tasks)).toEqual(["p1", "p2", "p4"]);
+  });
+
+  it("sorts dated before undated, earliest first, all-day ahead of timed", () => {
+    const tasks = [
+      task("none"),
+      task("timed", { due: { date: "2026-07-26T14:00:00" } }),
+      task("allday", { due: { date: "2026-07-26" } }),
+      task("earlier", { due: { date: "2026-07-25" } }),
+    ];
+    expect(order(tasks)).toEqual(["earlier", "allday", "timed", "none"]);
+  });
+
+  it("breaks a date tie on deadline, absent last", () => {
+    const due = { date: "2026-07-26" };
+    const tasks = [
+      task("no-deadline", { due }),
+      task("late", { due, deadline: { date: "2026-08-01" } }),
+      task("soon", { due, deadline: { date: "2026-07-27" } }),
+    ];
+    expect(order(tasks)).toEqual(["soon", "late", "no-deadline"]);
+  });
+
+  it("breaks a deadline tie on project order: Inbox first, parent before child", () => {
+    const ranks = buildProjectRanks([
+      { id: "sub", parent_id: "second", child_order: 0 },
+      { id: "second", child_order: 2 },
+      { id: "inbox", child_order: 9, inbox_project: true },
+      { id: "first", child_order: 1 },
+    ]);
+    const tasks = [
+      task("d", { project_id: "sub" }),
+      task("c", { project_id: "second" }),
+      task("b", { project_id: "first" }),
+      task("a", { project_id: "inbox" }),
+      task("e", { project_id: "gone" }), // outside the fetch cap: last, not first
+    ];
+    expect(order(tasks, ranks)).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("breaks a project tie on child_order, then on id", () => {
+    const ranks = buildProjectRanks([{ id: "p", child_order: 0 }]);
+    const tasks = [
+      task("z", { project_id: "p", child_order: 1 }),
+      task("b", { project_id: "p", child_order: 0 }),
+      task("a", { project_id: "p", child_order: 0 }),
+    ];
+    expect(order(tasks, ranks)).toEqual(["a", "b", "z"]);
+  });
+
+  it("survives a cycle in project parentage instead of hanging", () => {
+    const ranks = buildProjectRanks([
+      { id: "a", parent_id: "b", child_order: 0 },
+      { id: "b", parent_id: "a", child_order: 1 },
+    ]);
+    expect(ranks.size).toBeGreaterThan(0);
+  });
+
+  it("sorts a label view by the same rule", async () => {
+    upstream((url) => {
+      if (url.includes("/projects")) {
+        return { results: [{ id: "p", child_order: 0 }], next_cursor: null };
+      }
+      return {
+        results: [task("low", { priority: 1 }), task("high", { priority: 4 })],
+        next_cursor: null,
+      };
+    });
+
+    const response = await request(app())
+      .get("/glu/api/todoist/tasks?type=label&id=l1&query=deep-work")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["high", "low"]);
+  });
+
+  it("leaves a project view in Todoist's own order and reads no projects", async () => {
+    upstream(() => ({
+      results: [task("low", { priority: 1, child_order: 0 }), task("high", { priority: 4, child_order: 1 })],
+      next_cursor: null,
+    }));
+
+    const response = await request(app())
+      .get("/glu/api/todoist/tasks?type=project&id=p1")
+      .set("Cookie", [await liveCookie()]);
+
+    // Untouched: `section_order` then `child_order` is Todoist's project order,
+    // and the web applies it (ADR 12).
+    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["low", "high"]);
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toHaveLength(1);
+  });
+
+  it("still renders the list when the projects read fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetchMock.mockImplementation((input: unknown) =>
+      String(input).includes("/projects")
+        ? Promise.resolve(new Response("nope", { status: 500 }))
+        : Promise.resolve(
+            json({
+              results: [task("low", { priority: 1 }), task("high", { priority: 4 })],
+              next_cursor: null,
+            }),
+          ),
+    );
+
+    const response = await request(app())
+      .get("/glu/api/todoist/tasks?type=filter&id=f1&query=%40glu")
+      .set("Cookie", [await liveCookie()]);
+
+    expect(response.status).toBe(200);
+    expect(response.body.items.map((t: { id: string }) => t.id)).toEqual(["high", "low"]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

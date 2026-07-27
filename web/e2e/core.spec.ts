@@ -67,6 +67,35 @@ test.describe("timer lifecycle", () => {
     await expect(page.getByTestId("clock-slot")).toContainText("20:00");
   });
 
+  test("the transport is two live buttons, and Stop never moves (ADR 37)", async ({
+    page,
+    open,
+  }) => {
+    await open();
+
+    const stop = page.getByRole("button", { name: "Stop" });
+    const anchor = (await stop.boundingBox())!.x;
+    // The whole point of the toggle: no state has a dead target in it.
+    const noneDisabled = async () =>
+      await expect(page.locator("button:disabled")).toHaveCount(0);
+
+    for (const [press, next] of [
+      ["Start", "Pause"],
+      ["Pause", "Resume"],
+      ["Resume", "Pause"],
+    ] as const) {
+      await page.getByRole("button", { name: press, exact: true }).click();
+      await expect(page.getByRole("button", { name: next, exact: true })).toBeVisible();
+      await noneDisabled();
+      // A relabelling button that changed width would shove Stop sideways.
+      expect((await stop.boundingBox())!.x).toBe(anchor);
+    }
+
+    await stop.click();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await noneDisabled();
+  });
+
   test("a whole 20-minute session completes without waiting for it", async ({ page, open }) => {
     await open();
     await page.getByRole("button", { name: "Start" }).click();

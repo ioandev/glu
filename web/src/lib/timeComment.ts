@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import {
   ENVIRONMENT_KEYS,
   MAX_COMMENT_MINUTES,
@@ -25,36 +26,141 @@ export function activeEnvironmentKeys(environment: EnvironmentState): Environmen
   return ENVIRONMENT_KEYS.filter((key) => environment[key]);
 }
 
-/** The four sound environments share one `with …` clause; see the server copy. */
-const SOUND_FRAGMENTS: Record<(typeof SOUND_ENVIRONMENT_KEYS)[number], string> = {
-  music: "music",
-  podcast: "a podcast",
-  tv: "the TV on",
-  noisy: "background noise",
-};
-
-/** `a`, `a and b`, `a, b and c`. */
-function listPhrase(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+/**
+ * The vocabulary, in six languages (ADR 44) — the mirror of
+ * `backend/commentLocales.ts`. Both copies are pinned by literals in both
+ * packages' tests; change a word here and `backend/timeComments.test.ts` fails.
+ */
+interface Vocabulary {
+  unit: (minutes: number) => string;
+  sentence: (minutes: number, unit: string) => string;
+  sounds: Record<(typeof SOUND_ENVIRONMENT_KEYS)[number], string>;
+  withSounds: (list: string) => string;
+  silence: string;
+  headphones: string;
+  listSeparator: string;
+  listFinal: string;
+  clauseSeparator: string;
+  suffixSeparator: string;
 }
 
-export function environmentSuffix(keys: EnvironmentKey[]): string {
+const VOCABULARY: Record<Locale, Vocabulary> = {
+  en: {
+    unit: (m) => (m === 1 ? "minute" : "minutes"),
+    sentence: (m, unit) => `You spent ${m} ${unit} on this`,
+    sounds: { music: "music", podcast: "a podcast", tv: "the TV on", noisy: "background noise" },
+    withSounds: (list) => `with ${list}`,
+    silence: "in silence",
+    headphones: "on headphones",
+    listSeparator: ", ",
+    listFinal: " and ",
+    clauseSeparator: ", ",
+    suffixSeparator: " — ",
+  },
+  es: {
+    unit: (m) => (m === 1 ? "minuto" : "minutos"),
+    sentence: (m, unit) => `Dedicaste ${m} ${unit} a esto`,
+    sounds: {
+      music: "música",
+      podcast: "un pódcast",
+      tv: "la tele encendida",
+      noisy: "ruido de fondo",
+    },
+    withSounds: (list) => `con ${list}`,
+    silence: "en silencio",
+    headphones: "con auriculares",
+    listSeparator: ", ",
+    listFinal: " y ",
+    clauseSeparator: ", ",
+    suffixSeparator: " — ",
+  },
+  "zh-Hans": {
+    unit: () => "分钟",
+    sentence: (m, unit) => `你在这件事上花了 ${m} ${unit}`,
+    sounds: { music: "音乐", podcast: "播客", tv: "开着电视", noisy: "背景噪音" },
+    withSounds: (list) => `伴随${list}`,
+    silence: "在安静中",
+    headphones: "戴着耳机",
+    listSeparator: "、",
+    listFinal: "和",
+    clauseSeparator: "，",
+    suffixSeparator: " — ",
+  },
+  fr: {
+    unit: (m) => (m <= 1 ? "minute" : "minutes"),
+    sentence: (m, unit) => `Vous avez passé ${m} ${unit} là-dessus`,
+    sounds: {
+      music: "de la musique",
+      podcast: "un podcast",
+      tv: "la télé allumée",
+      noisy: "du bruit de fond",
+    },
+    withSounds: (list) => `avec ${list}`,
+    silence: "en silence",
+    headphones: "au casque",
+    listSeparator: ", ",
+    listFinal: " et ",
+    clauseSeparator: ", ",
+    suffixSeparator: " — ",
+  },
+  pt: {
+    unit: (m) => (m === 1 ? "minuto" : "minutos"),
+    sentence: (m, unit) => `Dedicaste ${m} ${unit} a isto`,
+    sounds: { music: "música", podcast: "um podcast", tv: "a TV ligada", noisy: "ruído de fundo" },
+    withSounds: (list) => `com ${list}`,
+    silence: "em silêncio",
+    headphones: "com auscultadores",
+    listSeparator: ", ",
+    listFinal: " e ",
+    clauseSeparator: ", ",
+    suffixSeparator: " — ",
+  },
+  de: {
+    unit: (m) => (m === 1 ? "Minute" : "Minuten"),
+    sentence: (m, unit) => `Du hast ${m} ${unit} daran gearbeitet`,
+    sounds: {
+      music: "Musik",
+      podcast: "einem Podcast",
+      tv: "laufendem Fernseher",
+      noisy: "Hintergrundgeräuschen",
+    },
+    withSounds: (list) => `mit ${list}`,
+    silence: "in Stille",
+    headphones: "mit Kopfhörern",
+    listSeparator: ", ",
+    listFinal: " und ",
+    clauseSeparator: ", ",
+    suffixSeparator: " — ",
+  },
+};
+
+function listPhrase(parts: string[], separator: string, final: string): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(separator)}${final}${parts[parts.length - 1]}`;
+}
+
+export function environmentSuffix(
+  keys: EnvironmentKey[],
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   const on = new Set(keys);
+  const words = VOCABULARY[locale];
   const clauses: string[] = [];
 
   const sounds = SOUND_ENVIRONMENT_KEYS.filter((key) => on.has(key)).map(
-    (key) => SOUND_FRAGMENTS[key],
+    (key) => words.sounds[key],
   );
   if (sounds.length > 0) {
-    clauses.push(`with ${listPhrase(sounds)}`);
+    clauses.push(words.withSounds(listPhrase(sounds, words.listSeparator, words.listFinal)));
   } else if (on.has("silence")) {
-    clauses.push("in silence");
+    clauses.push(words.silence);
   }
   // Orthogonal equipment, so it is its own clause (ADR 02's rule, in grammar).
-  if (on.has("headphones")) clauses.push("on headphones");
+  if (on.has("headphones")) clauses.push(words.headphones);
 
-  return clauses.length === 0 ? "" : ` — ${clauses.join(", ")}`;
+  return clauses.length === 0
+    ? ""
+    : `${words.suffixSeparator}${clauses.join(words.clauseSeparator)}`;
 }
 
 /**
@@ -67,9 +173,14 @@ export function environmentSuffix(keys: EnvironmentKey[]): string {
 export const SAMPLE_ENVIRONMENT: EnvironmentKey[] = ["music", "headphones"];
 
 /** Exactly what the server will write, for a run of `minutes` in `keys`. */
-export function previewTimeComment(minutes: number, keys: EnvironmentKey[]): string {
-  const unit = minutes === 1 ? "minute" : "minutes";
-  return `[${minutes}m] You spent ${minutes} ${unit} on this${environmentSuffix(keys)}`;
+export function previewTimeComment(
+  minutes: number,
+  keys: EnvironmentKey[],
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const words = VOCABULARY[locale];
+  // The `[Nm]` prefix is never localised — see `backend/commentLocales.ts`.
+  return `[${minutes}m] ${words.sentence(minutes, words.unit(minutes))}${environmentSuffix(keys, locale)}`;
 }
 
 /**

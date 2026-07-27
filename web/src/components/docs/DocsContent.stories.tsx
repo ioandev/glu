@@ -1,6 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, within } from "storybook/test";
-import { DocsContent } from "./DocsContent";
+import { LegalPage } from "@/components/legal/LegalPage";
+import docsEn from "./content/en";
+
+/*
+ * The shell over the English manual rather than `DocsContent` (ADR 44): that is
+ * now an `async` server component resolving the reader's language, and these
+ * assertions are about English headings and the shared prose treatment.
+ */
+const DocsContent = () => <LegalPage {...docsEn} />;
 
 /**
  * ADR 29. As with the legal pages (ADR 26), the real gate here is the a11y

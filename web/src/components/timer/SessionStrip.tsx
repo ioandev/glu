@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button, Group, Popover, Stack, Switch, Text } from "@mantine/core";
+import { useTranslations } from "next-intl";
 import { useGluStore } from "@/store/gluStore";
 import { SESSION_DOT_CAP } from "@/store/types";
 import classes from "./sessionStrip.module.css";
@@ -17,26 +18,27 @@ export function SessionStrip() {
   const showSessionOnClock = useGluStore((s) => s.showSessionOnClock);
   const setShowSessionOnClock = useGluStore((s) => s.setShowSessionOnClock);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const t = useTranslations("timer");
 
   const count = sessions.length;
   const dots = Math.min(count, SESSION_DOT_CAP);
   const overflow = count - dots;
 
   return (
-    <Group gap="sm" justify="center" wrap="wrap" aria-label="Sessions today">
+    <Group gap="sm" justify="center" wrap="wrap" aria-label={t("sessionsAriaLabel")}>
       <Group gap={6} aria-hidden="true">
         {Array.from({ length: dots }, (_, i) => (
           <span key={i} className={classes.dot} />
         ))}
         {overflow > 0 ? (
           <Text component="span" className={classes.overflow}>
-            +{overflow}
+            {t("sessionsOverflow", { count: overflow })}
           </Text>
         ) : null}
       </Group>
 
       <Text component="span" className={classes.count} data-testid="session-count">
-        {count} today
+        {t("sessionsToday", { count })}
       </Text>
 
       <Popover
@@ -59,18 +61,16 @@ export function SessionStrip() {
             variant="default"
             onClick={() => setConfirmOpen((o) => !o)}
           >
-            New day
+            {t("newDay")}
           </Button>
         </Popover.Target>
         <Popover.Dropdown className={classes.confirm}>
-          <Stack gap="xs" role="dialog" aria-label="Confirm new day">
+          <Stack gap="xs" role="dialog" aria-label={t("newDayConfirmAriaLabel")}>
             <Text fw={600} size="sm">
-              Start a new day?
+              {t("newDayHeading")}
             </Text>
             <Text size="sm" c="dimmed">
-              {count === 0
-                ? "Nothing to reset yet."
-                : `Today's ${count} session${count === 1 ? "" : "s"} reset to zero.`}
+              {count === 0 ? t("newDayNothing") : t("newDayReset", { count })}
             </Text>
             <Group gap="xs" justify="flex-end">
               <Button
@@ -78,7 +78,7 @@ export function SessionStrip() {
                 variant="subtle"
                 onClick={() => setConfirmOpen(false)}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 className={classes.confirmButton}
@@ -87,7 +87,7 @@ export function SessionStrip() {
                   setConfirmOpen(false);
                 }}
               >
-                Reset
+                {t("reset")}
               </Button>
             </Group>
           </Stack>
@@ -99,7 +99,7 @@ export function SessionStrip() {
       <Switch
         className={classes.showSessionSwitch}
         size="md"
-        label="Show sessions"
+        label={t("showSessions")}
         checked={showSessionOnClock}
         onChange={(event) => setShowSessionOnClock(event.currentTarget.checked)}
       />

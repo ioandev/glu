@@ -49,7 +49,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Generated per clock so the sidebar lists all 18 by name. */
+/** Generated per clock so the sidebar lists every design by name. */
 const perClock = Object.fromEntries(
   CLOCKS.map((clock) => [clock.name.replace(/[^A-Za-z]/g, ""), { args: { id: clock.id } }]),
 ) as Record<string, Story>;
@@ -72,6 +72,78 @@ export const SplitFlap = perClock.Splitflap;
 export const Radar = perClock.Radar;
 export const Bauhaus = perClock.Bauhaus;
 export const Edge = perClock.Edge;
+
+// ADR 42's second set.
+export const Hourglass = perClock.Hourglass;
+export const Segment = perClock.Segment;
+export const Meter = perClock.Meter;
+export const Nixie = perClock.Nixie;
+export const Nest = perClock.Nest;
+export const Lunar = perClock.Lunar;
+export const Candle = perClock.Candle;
+export const Steps = perClock.Steps;
+export const LCD = perClock.LCD;
+export const Spiral = perClock.Spiral;
+export const Soft = perClock.Soft;
+export const Glass = perClock.Glass;
+export const Comet = perClock.Comet;
+export const Barcode = perClock.Barcode;
+export const Cell = perClock.Cell;
+export const Wedge = perClock.Wedge;
+export const Words = perClock.Words;
+export const Prism = perClock.Prism;
+export const Pixels = perClock.Pixels;
+export const Tempo = perClock.Tempo;
+export const Mercury = perClock.Mercury;
+export const Ghost = perClock.Ghost;
+
+// ADR 45's third set.
+export const Sweep = perClock.Sweep;
+export const Beam = perClock.Beam;
+export const Tally = perClock.Tally;
+export const Odometer = perClock.Odometer;
+export const Sunrise = perClock.Sunrise;
+export const Column = perClock.Column;
+export const Gauge = perClock.Gauge;
+export const Bank = perClock.Bank;
+export const Ripple = perClock.Ripple;
+export const Ink = perClock.Ink;
+export const Percent = perClock.Percent;
+export const Ruler = perClock.Ruler;
+export const Bubble = perClock.Bubble;
+export const Skyline = perClock.Skyline;
+export const Altitude = perClock.Altitude;
+export const Beads = perClock.Beads;
+export const Hand = perClock.Hand;
+export const Matrix = perClock.Matrix;
+export const Arcade = perClock.Arcade;
+export const Quicksilver = perClock.Quicksilver;
+export const Log = perClock.Log;
+export const Stars = perClock.Stars;
+export const Depth = perClock.Depth;
+export const Chain = perClock.Chain;
+export const Pulse = perClock.Pulse;
+export const Pour = perClock.Pour;
+export const Dial = perClock.Dial;
+export const Sprout = perClock.Sprout;
+export const Laps = perClock.Laps;
+export const Marquee = perClock.Marquee;
+export const Slices = perClock.Slices;
+export const Ticks = perClock.Ticks;
+export const Punchcard = perClock.Punchcard;
+export const Wash = perClock.Wash;
+export const Route = perClock.Route;
+export const Neon = perClock.Neon;
+export const Ledger = perClock.Ledger;
+export const Signal = perClock.Signal;
+export const Blueprint = perClock.Blueprint;
+export const Chip = perClock.Chip;
+export const Waveform = perClock.Waveform;
+export const Milestones = perClock.Milestones;
+export const Heat = perClock.Heat;
+export const Dominoes = perClock.Dominoes;
+export const Aperture = perClock.Aperture;
+export const Confetti = perClock.Confetti;
 
 /** Geometry at the three telling instants. */
 export const FullHalfEmpty: Story = {
@@ -136,6 +208,6 @@ export const AllClocks: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelectorAll("figure")).toHaveLength(18);
+    await expect(canvasElement.querySelectorAll("figure")).toHaveLength(CLOCKS.length);
   },
 };

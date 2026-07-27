@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 import { ClockGallery } from "@/components/clock/ClockGallery";
 import { EnvironmentToggles } from "@/components/environment/EnvironmentToggles";
@@ -22,6 +23,7 @@ export function AppShell() {
   // Gate the timer on hydration so the sub-100 ms defaults→persisted swap never
   // shows the wrong time or the wrong clock (ADR 02, ADR 08).
   const hydrated = useHydrated();
+  const t = useTranslations("app");
   useTimerHotkeys();
   // Read-only consumer of timer status: it never transitions the machine (ADR 17).
   const status = useGluStore((s) => s.status);
@@ -44,7 +46,7 @@ export function AppShell() {
         <HeaderDrawer />
       </div>
 
-      <section className={classes.timerArea} aria-label="Timer">
+      <section className={classes.timerArea} aria-label={t("timerAriaLabel")}>
         {/* DOM order is the phone order — the clock owns the first viewport.
             At/above `sm` the preset row is re-ordered above the clock in CSS. */}
         <div className={classes.clockSlot}>
@@ -60,10 +62,10 @@ export function AppShell() {
         <div className={classes.controls}>{hydrated ? <TimerPanel /> : null}</div>
       </section>
 
-      <section className={classes.reservedArea} aria-label="Todoist area">
+      <section className={classes.reservedArea} aria-label={t("todoistAriaLabel")}>
         <TodoistPanel />
       </section>
-      <section className={classes.togglesArea} aria-label="Environment toggles">
+      <section className={classes.togglesArea} aria-label={t("environmentAriaLabel")}>
         <EnvironmentToggles />
       </section>
     </div>

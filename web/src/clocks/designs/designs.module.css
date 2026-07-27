@@ -1,4 +1,4 @@
-/* Shared primitives for the 18 designs. Everything sizes in container units so
+/* Shared primitives for the clock designs. Everything sizes in container units so
    each design holds its layout from a half-screen slot to a full mobile
    viewport (ADR 07). */
 
@@ -422,4 +422,1562 @@
   border-radius: var(--glu-radius-card, 4cqmin);
   background: color-mix(in srgb, var(--clk-bg) 92%, transparent);
   color: var(--clk-ink);
+}
+
+/* ==========================================================================
+   The second set (ADR 42). Same rules as everything above: container units, and
+   every colour comes from a `--clk-*` token so the palette still drives the
+   design.
+   ========================================================================== */
+
+/* A square stage that an `.overlayCenter` can sit on top of. */
+.stackCenter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(78cqw, 78cqh);
+  height: min(78cqw, 78cqh);
+}
+
+/* Shared thin progress track (Nixie, Glass, Mercury, LCD all want one). */
+.track {
+  display: block;
+  width: 55cqmin;
+  height: 0.8cqmin;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clk-muted) 45%, transparent);
+  overflow: hidden;
+}
+
+.trackFill {
+  display: block;
+  height: 100%;
+  background: var(--clk-accent);
+}
+
+/* --- Hourglass ------------------------------------------------------------ */
+
+.hourglass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hgBulb {
+  position: relative;
+  width: 32cqmin;
+  height: 29cqmin;
+  border: 0.8cqmin solid var(--clk-ink);
+  overflow: hidden;
+}
+
+.hgTop {
+  border-radius: 4cqmin 4cqmin 13cqmin 13cqmin;
+}
+
+.hgBottom {
+  border-radius: 13cqmin 13cqmin 4cqmin 4cqmin;
+}
+
+.hgSand {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--clk-accent);
+}
+
+.hgNeck {
+  display: block;
+  width: 0.8cqmin;
+  height: 7cqmin;
+  background: var(--clk-accent);
+}
+
+/* --- Meter ---------------------------------------------------------------- */
+
+.eqRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5cqmin;
+  height: 42cqmin;
+}
+
+.eqBar {
+  flex: 1;
+  border-radius: 0.8cqmin;
+}
+
+/* --- Nixie ---------------------------------------------------------------- */
+
+.tubeRow {
+  display: flex;
+  gap: 2cqmin;
+}
+
+.tube {
+  width: 15cqmin;
+  height: 24cqmin;
+  border-radius: 3cqmin;
+  border: 0.3cqmin solid color-mix(in srgb, var(--clk-accent) 35%, transparent);
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    color-mix(in srgb, var(--clk-accent) 22%, var(--clk-bg)),
+    var(--clk-bg)
+  );
+  color: var(--clk-accent);
+  font-family: var(--glu-font-mono), ui-monospace, monospace;
+  font-size: 13cqmin;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The tube glow, in the design's own accent rather than a baked orange. */
+  text-shadow: 0 0 3cqmin color-mix(in srgb, var(--clk-accent) 70%, transparent);
+}
+
+/* --- Lunar ---------------------------------------------------------------- */
+
+.moonRow {
+  display: flex;
+  gap: 2.5cqmin;
+}
+
+.moon {
+  display: block;
+  width: 6cqmin;
+  height: 6cqmin;
+  border-radius: 50%;
+  border: 0.3cqmin solid color-mix(in srgb, var(--clk-muted) 60%, transparent);
+}
+
+/* --- Candle --------------------------------------------------------------- */
+
+.candleStack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.flame {
+  display: block;
+  width: 4cqmin;
+  height: 6.5cqmin;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(
+    circle at 50% 70%,
+    var(--clk-bg),
+    var(--clk-accent) 70%,
+    transparent
+  );
+  box-shadow: 0 0 9cqmin color-mix(in srgb, var(--clk-accent) 55%, transparent);
+}
+
+.wick {
+  display: block;
+  width: 0.5cqmin;
+  height: 2cqmin;
+  background: var(--clk-muted);
+}
+
+.wax {
+  display: block;
+  width: 20cqmin;
+  border-radius: 2cqmin 2cqmin 1cqmin 1cqmin;
+  /* Wax is pale in *both* schemes — taking the ink would paint a black candle
+     in light. Tinted from the accent so it still moves with the palette. */
+  background: linear-gradient(
+    color-mix(in srgb, var(--clk-accent) 18%, white),
+    color-mix(in srgb, var(--clk-accent) 38%, white)
+  );
+}
+
+.holder {
+  display: block;
+  width: 32cqmin;
+  height: 2.6cqmin;
+  border-radius: 1cqmin;
+  background: var(--clk-muted);
+}
+
+/* --- Steps ---------------------------------------------------------------- */
+
+.stepRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2cqmin;
+  height: 50cqmin;
+}
+
+.step {
+  flex: 1;
+  border-radius: 1cqmin 1cqmin 0 0;
+}
+
+/* --- LCD ------------------------------------------------------------------ */
+
+.lcdScreen {
+  width: 70cqmin;
+  box-sizing: border-box;
+  border-radius: 3.5cqmin;
+  padding: 6cqmin 5cqmin;
+  display: flex;
+  flex-direction: column;
+  gap: 3cqmin;
+  /* The recessed screen: a tint of the accent, kept light enough that the
+     design's own ink clears 4.5:1 on it in both schemes. */
+  background: color-mix(in srgb, var(--clk-accent) 28%, var(--clk-bg));
+  box-shadow: inset 0 0.8cqmin 2cqmin color-mix(in srgb, var(--clk-ink) 35%, transparent);
+}
+
+.lcdDigits {
+  font-size: 15cqmin;
+  text-align: center;
+  letter-spacing: 0.06em;
+  /* The lean of a cheap segment display — the one flourish the mockup keeps. */
+  transform: skewX(-6deg);
+}
+
+.lcdTrack {
+  display: block;
+  height: 2cqmin;
+  border-radius: 0.6cqmin;
+  background: color-mix(in srgb, var(--clk-ink) 22%, transparent);
+  overflow: hidden;
+}
+
+.lcdTrackFill {
+  display: block;
+  height: 100%;
+  background: var(--clk-ink);
+}
+
+.lcdButtons {
+  display: flex;
+  gap: 4cqmin;
+}
+
+.lcdButton {
+  display: block;
+  width: 11cqmin;
+  height: 11cqmin;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--clk-ink) 30%, var(--clk-bg));
+  box-shadow: 0 0.8cqmin 0 color-mix(in srgb, var(--clk-ink) 50%, var(--clk-bg));
+}
+
+.lcdButtonHot {
+  background: var(--clk-accent);
+  box-shadow: 0 0.8cqmin 0 color-mix(in srgb, var(--clk-accent) 60%, var(--clk-ink));
+}
+
+/* --- Soft ----------------------------------------------------------------- */
+
+.softDial {
+  position: relative;
+  width: 58cqmin;
+  height: 58cqmin;
+  border-radius: 50%;
+  background: var(--clk-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The whole point of the design: light from the top-left, in tokens. */
+  box-shadow:
+    3.5cqmin 3.5cqmin 7cqmin color-mix(in srgb, var(--clk-ink) 22%, transparent),
+    -3.5cqmin -3.5cqmin 7cqmin color-mix(in srgb, var(--clk-bg) 92%, white);
+}
+
+.softWell {
+  width: 41cqmin;
+  height: 41cqmin;
+  border-radius: 50%;
+  background: var(--clk-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5cqmin;
+  box-shadow:
+    inset 2cqmin 2cqmin 4.5cqmin color-mix(in srgb, var(--clk-ink) 18%, transparent),
+    inset -2cqmin -2cqmin 4.5cqmin color-mix(in srgb, var(--clk-bg) 90%, white);
+}
+
+/* --- Glass ---------------------------------------------------------------- */
+
+.glassWash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    var(--clk-bg),
+    color-mix(in srgb, var(--clk-accent) 30%, var(--clk-bg)),
+    color-mix(in srgb, var(--clk-muted) 60%, var(--clk-bg))
+  );
+}
+
+.glassBloom {
+  position: absolute;
+  top: -12cqmin;
+  right: -12cqmin;
+  width: 52cqmin;
+  height: 52cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+  opacity: 0.6;
+  filter: blur(12cqmin);
+}
+
+.glassCard {
+  position: relative;
+  width: 72cqmin;
+  box-sizing: border-box;
+  border-radius: 5cqmin;
+  padding: 8cqmin 7cqmin;
+  display: flex;
+  flex-direction: column;
+  gap: 4cqmin;
+  background: color-mix(in srgb, var(--clk-ink) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--clk-ink) 35%, transparent);
+  backdrop-filter: blur(3cqmin);
+}
+
+/* The frosted card sits on the wash, not on the card background — its text
+   takes the ink directly rather than the muted token. */
+.glassInk {
+  color: var(--clk-ink);
+}
+
+.glassTrack {
+  display: block;
+  height: 1.6cqmin;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clk-ink) 25%, transparent);
+  overflow: hidden;
+}
+
+.glassTrackFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--clk-ink);
+}
+
+/* --- Comet ---------------------------------------------------------------- */
+
+.orbitField {
+  position: relative;
+  width: 62cqmin;
+  height: 62cqmin;
+}
+
+.orbitPath {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--clk-muted) 70%, transparent);
+}
+
+.cometArm {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.cometBody {
+  position: absolute;
+  left: calc(50% - 2.4cqmin);
+  top: -2.4cqmin;
+  width: 4.8cqmin;
+  height: 4.8cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+  box-shadow: 0 0 6cqmin color-mix(in srgb, var(--clk-accent) 80%, transparent);
+}
+
+/* --- Barcode -------------------------------------------------------------- */
+
+.barcodeRow {
+  display: flex;
+  gap: 0.6cqmin;
+  height: 40cqmin;
+  align-items: stretch;
+}
+
+.barcodeLine {
+  flex: 1;
+}
+
+/* --- Cell ----------------------------------------------------------------- */
+
+.battery {
+  display: flex;
+  align-items: center;
+}
+
+.batteryShell {
+  width: 50cqmin;
+  height: 25cqmin;
+  box-sizing: border-box;
+  border: 1cqmin solid var(--clk-muted);
+  border-radius: 5cqmin;
+  padding: 1.8cqmin;
+  display: flex;
+}
+
+.batteryFill {
+  border-radius: 2.4cqmin;
+  background: linear-gradient(
+    var(--clk-accent),
+    color-mix(in srgb, var(--clk-accent) 70%, var(--clk-ink))
+  );
+}
+
+.batteryNub {
+  display: block;
+  width: 2.6cqmin;
+  height: 9cqmin;
+  border-radius: 0 1.4cqmin 1.4cqmin 0;
+  background: var(--clk-muted);
+}
+
+/* --- Wedge ---------------------------------------------------------------- */
+
+.wedgeDial {
+  position: relative;
+  width: 56cqmin;
+  height: 56cqmin;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 2cqmin var(--clk-bg),
+    0 2.5cqmin 6cqmin color-mix(in srgb, var(--clk-accent) 25%, transparent);
+}
+
+.wedgePin {
+  position: absolute;
+  left: calc(50% - 1.8cqmin);
+  top: calc(50% - 1.8cqmin);
+  width: 3.6cqmin;
+  height: 3.6cqmin;
+  border-radius: 50%;
+  background: var(--clk-bg);
+}
+
+/* --- Words ---------------------------------------------------------------- */
+
+.sentence {
+  font-size: 11cqmin;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--clk-ink);
+  text-wrap: pretty;
+}
+
+/* --- Prism ---------------------------------------------------------------- */
+
+.prismWrap {
+  position: relative;
+  width: 62cqmin;
+  height: 62cqmin;
+}
+
+.prismRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--clk-accent),
+    color-mix(in srgb, var(--clk-accent) 45%, var(--clk-ink)),
+    var(--clk-ink),
+    color-mix(in srgb, var(--clk-accent) 60%, var(--clk-muted)),
+    var(--clk-accent)
+  );
+  /* A ring, not a disc — the readout sits in the hole. */
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%, #000 78%, transparent 79%);
+  mask: radial-gradient(circle, transparent 62%, #000 63%, #000 78%, transparent 79%);
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* --- Pixels --------------------------------------------------------------- */
+
+.pixelGrid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 1.1cqmin;
+  width: 62cqmin;
+}
+
+.pixel {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 1cqmin;
+}
+
+/* --- Mercury -------------------------------------------------------------- */
+
+.thermometer {
+  display: flex;
+  align-items: center;
+}
+
+.thermoBulb {
+  display: block;
+  width: 9cqmin;
+  height: 9cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+  z-index: 1;
+}
+
+.thermoTube {
+  flex: 1;
+  height: 4.5cqmin;
+  margin-left: -1.5cqmin;
+  border-radius: 0 2.4cqmin 2.4cqmin 0;
+  background: color-mix(in srgb, var(--clk-accent) 20%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.thermoFill {
+  display: block;
+  height: 100%;
+  background: var(--clk-accent);
+}
+
+/* --- Ghost ---------------------------------------------------------------- */
+
+.ghostOutline {
+  position: relative;
+  font-family: var(--glu-font-display), var(--glu-font-sans), sans-serif;
+  font-size: 42cqmin;
+  font-weight: 700;
+  line-height: 0.9;
+  color: transparent;
+  -webkit-text-stroke: 0.6cqmin var(--clk-muted);
+}
+
+.ghostFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--clk-ink);
+  -webkit-text-stroke: 0;
+}
+
+/* ==========================================================================
+   The third set (ADR 45) — the stopwatch sheet, re-pointed at a countdown.
+   Same rules: container units, `--clk-*` colour only.
+   ========================================================================== */
+
+/* --- Beam ----------------------------------------------------------------- */
+
+.beamTrack {
+  display: block;
+  height: 4cqmin;
+  border-radius: 2cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 35%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.beamFill {
+  display: block;
+  height: 100%;
+  border-radius: 2cqmin;
+  background: linear-gradient(
+    90deg,
+    var(--clk-accent),
+    color-mix(in srgb, var(--clk-accent) 45%, var(--clk-ink))
+  );
+}
+
+/* --- Tally ---------------------------------------------------------------- */
+
+.tallyWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6cqmin;
+}
+
+.tallyGroup {
+  position: relative;
+  display: flex;
+  gap: 1.8cqmin;
+  padding: 1cqmin 0.5cqmin;
+}
+
+.tallyMark {
+  display: block;
+  width: 1.4cqmin;
+  height: 13cqmin;
+  border-radius: 0.8cqmin;
+  background: var(--clk-ink);
+}
+
+.tallySlash {
+  position: absolute;
+  left: -1cqmin;
+  top: 5.5cqmin;
+  width: 15cqmin;
+  height: 1.4cqmin;
+  border-radius: 0.8cqmin;
+  background: var(--clk-accent);
+  transform: rotate(-24deg);
+}
+
+/* --- Odometer ------------------------------------------------------------- */
+
+.drumHousing {
+  display: flex;
+  gap: 1.4cqmin;
+  padding: 4cqmin 5cqmin;
+  border-radius: 4cqmin;
+  background: color-mix(in srgb, var(--clk-ink) 22%, var(--clk-bg));
+  box-shadow: inset 0 0.8cqmin 3cqmin color-mix(in srgb, var(--clk-ink) 55%, transparent);
+}
+
+.drum {
+  width: 14cqmin;
+  height: 21cqmin;
+  border-radius: 1.6cqmin;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12cqmin;
+  color: var(--clk-ink);
+  /* The drum's curve: lit across the middle, falling away top and bottom. */
+  background: linear-gradient(
+    color-mix(in srgb, var(--clk-ink) 12%, var(--clk-bg)),
+    color-mix(in srgb, var(--clk-ink) 26%, var(--clk-bg)),
+    color-mix(in srgb, var(--clk-ink) 12%, var(--clk-bg))
+  );
+}
+
+/* --- Sunrise -------------------------------------------------------------- */
+
+.dawnSky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    var(--clk-bg),
+    color-mix(in srgb, var(--clk-muted) 70%, var(--clk-bg)),
+    color-mix(in srgb, var(--clk-accent) 60%, var(--clk-muted)),
+    var(--clk-accent)
+  );
+}
+
+.sunDisc {
+  position: absolute;
+  left: calc(50% - 13cqmin);
+  width: 26cqmin;
+  height: 26cqmin;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--clk-accent) 25%, white);
+  box-shadow: 0 0 15cqmin color-mix(in srgb, var(--clk-accent) 60%, transparent);
+}
+
+.horizonBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24%;
+  background: color-mix(in srgb, var(--clk-ink) 88%, black);
+  color: var(--clk-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1cqmin;
+}
+
+.horizonBar .label,
+.horizonBar span {
+  color: color-mix(in srgb, var(--clk-bg) 88%, white);
+}
+
+/* --- Column / Quicksilver ------------------------------------------------- */
+
+.columnRow {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9cqmin;
+}
+
+.dotStack {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2.4cqmin;
+}
+
+.stackDot {
+  display: block;
+  width: 5.5cqmin;
+  height: 5.5cqmin;
+  border-radius: 50%;
+}
+
+/* --- Gauge / Dial --------------------------------------------------------- */
+
+.gaugeSvg {
+  width: 72cqmin;
+  display: block;
+  overflow: visible;
+}
+
+/* --- Bank ----------------------------------------------------------------- */
+
+.coinStack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.coin {
+  display: block;
+  width: 30cqmin;
+  height: 4.4cqmin;
+  border-radius: 2.2cqmin;
+  border: 0.5cqmin solid var(--clk-muted);
+  box-sizing: border-box;
+  margin-top: -1.6cqmin;
+}
+
+/* --- Ripple --------------------------------------------------------------- */
+
+.rippleRing {
+  position: absolute;
+  border-radius: 50%;
+  border: 0.5cqmin solid var(--clk-accent);
+}
+
+/* --- Ink ------------------------------------------------------------------ */
+
+.inkWord {
+  position: relative;
+  font-family: var(--glu-font-display), var(--glu-font-sans), sans-serif;
+  font-size: 19cqmin;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 0.6cqmin var(--clk-muted);
+}
+
+.inkFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--clk-ink);
+  -webkit-text-stroke: 0;
+}
+
+/* --- Percent -------------------------------------------------------------- */
+
+.percentFigure {
+  font-size: 40cqmin;
+  font-weight: 700;
+  line-height: 0.9;
+  color: var(--clk-ink);
+}
+
+.percentSign {
+  font-size: 16cqmin;
+  font-weight: 700;
+  color: var(--clk-muted);
+}
+
+/* --- Ruler ---------------------------------------------------------------- */
+
+.rulerBed {
+  position: relative;
+  height: 12cqmin;
+}
+
+.rulerTicks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5cqmin;
+  display: flex;
+  justify-content: space-between;
+}
+
+.rulerTick {
+  width: 0.5cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 55%, var(--clk-bg));
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0.9cqmin;
+  margin-left: -0.45cqmin;
+  border-radius: 0.5cqmin;
+  background: var(--clk-accent);
+}
+
+/* --- Bubble --------------------------------------------------------------- */
+
+.bubble {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--clk-accent) 45%, var(--clk-bg)),
+    var(--clk-accent)
+  );
+}
+
+/* --- Skyline -------------------------------------------------------------- */
+
+.skylineRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.6cqmin;
+  height: 44cqmin;
+}
+
+.building {
+  flex: 1;
+  border-radius: 0.8cqmin 0.8cqmin 0 0;
+}
+
+/* --- Altitude ------------------------------------------------------------- */
+
+.altitudeRow {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 8cqmin;
+  display: flex;
+  align-items: stretch;
+  gap: 8cqmin;
+}
+
+.rail {
+  position: relative;
+  width: 2.2cqmin;
+  border-radius: 1.1cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 40%, var(--clk-bg));
+}
+
+.railFill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 1.1cqmin;
+  background: var(--clk-accent);
+}
+
+.railMarker {
+  position: absolute;
+  left: -2.2cqmin;
+  width: 6.6cqmin;
+  height: 6.6cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+  border: 1.1cqmin solid var(--clk-bg);
+  box-sizing: border-box;
+}
+
+/* --- Beads ---------------------------------------------------------------- */
+
+.beadString {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2.2cqmin;
+  padding: 0 1.5cqmin;
+}
+
+.beadWire {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.5cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 55%, var(--clk-bg));
+}
+
+.bead {
+  position: relative;
+  display: block;
+  width: 5cqmin;
+  height: 5cqmin;
+  border-radius: 50%;
+}
+
+/* --- Hand ----------------------------------------------------------------- */
+
+.bareDial {
+  position: relative;
+  width: 58cqmin;
+  height: 58cqmin;
+  border-radius: 50%;
+  border: 0.5cqmin solid color-mix(in srgb, var(--clk-muted) 55%, var(--clk-bg));
+}
+
+.dialPip {
+  position: absolute;
+  left: calc(50% - 0.25cqmin);
+  top: 2cqmin;
+  width: 0.5cqmin;
+  height: 2.6cqmin;
+  background: var(--clk-muted);
+  transform-origin: 0.25cqmin 27cqmin;
+}
+
+.dialHand {
+  position: absolute;
+  left: calc(50% - 0.5cqmin);
+  top: 50%;
+  width: 1cqmin;
+  height: 23cqmin;
+  border-radius: 0.5cqmin;
+  background: var(--clk-ink);
+  transform-origin: 0.5cqmin 0;
+  will-change: transform;
+}
+
+.dialHub {
+  position: absolute;
+  left: calc(50% - 1.3cqmin);
+  top: calc(50% - 1.3cqmin);
+  width: 2.6cqmin;
+  height: 2.6cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+}
+
+/* --- Matrix --------------------------------------------------------------- */
+
+.matrixGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1.4cqmin;
+  width: 62cqmin;
+}
+
+.matrixCell {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 1.2cqmin;
+}
+
+/* --- Arcade --------------------------------------------------------------- */
+
+.arcadeScore {
+  font-size: 16cqmin;
+  font-weight: 500;
+  color: var(--clk-ink);
+  /* The cabinet's chromatic offset, in the palette's own two colours. */
+  text-shadow:
+    0.45cqmin 0.45cqmin 0 var(--clk-accent),
+    -0.45cqmin -0.45cqmin 0 color-mix(in srgb, var(--clk-accent) 40%, var(--clk-muted));
+}
+
+.lifeRow {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqmin;
+}
+
+.life {
+  display: block;
+  width: 4cqmin;
+  height: 4cqmin;
+  background: var(--clk-accent);
+  clip-path: polygon(50% 100%, 0 35%, 20% 0, 50% 25%, 80% 0, 100% 35%);
+}
+
+/* --- Quicksilver ---------------------------------------------------------- */
+
+.thermoStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.thermoColumn {
+  position: relative;
+  display: block;
+  width: 7cqmin;
+  height: 55cqmin;
+  border-radius: 3.5cqmin 3.5cqmin 0 0;
+  background: color-mix(in srgb, var(--clk-accent) 20%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.thermoRise {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--clk-accent);
+}
+
+.thermoBall {
+  display: block;
+  width: 12cqmin;
+  height: 12cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+  margin-top: -2cqmin;
+}
+
+/* --- Log ------------------------------------------------------------------ */
+
+.logDim,
+.logDone,
+.logLive {
+  font-size: 3.4cqmin;
+  line-height: 1.5;
+}
+
+.logDim {
+  color: color-mix(in srgb, var(--clk-muted) 40%, var(--clk-bg));
+}
+
+.logDone {
+  color: var(--clk-muted);
+  white-space: pre;
+}
+
+.logLive {
+  color: var(--clk-accent);
+  white-space: pre;
+}
+
+/* --- Stars ---------------------------------------------------------------- */
+
+.star {
+  position: absolute;
+  width: 1.2cqmin;
+  height: 1.2cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+}
+
+.starFoot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 9cqmin;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5cqmin;
+}
+
+/* --- Depth ---------------------------------------------------------------- */
+
+.water {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    color-mix(in srgb, var(--clk-accent) 85%, white),
+    var(--clk-accent),
+    color-mix(in srgb, var(--clk-accent) 45%, var(--clk-bg)),
+    var(--clk-bg)
+  );
+}
+
+.diver {
+  position: absolute;
+  left: calc(50% - 2.4cqmin);
+  width: 4.8cqmin;
+  height: 4.8cqmin;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--clk-bg) 30%, white);
+  box-shadow: 0 0 5cqmin color-mix(in srgb, var(--clk-bg) 40%, transparent);
+}
+
+.depthMark {
+  position: absolute;
+  left: 7cqmin;
+  color: var(--clk-ink);
+}
+
+.depthFoot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 7cqmin;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+/* --- Chain ---------------------------------------------------------------- */
+
+.chainRow {
+  display: flex;
+  align-items: center;
+}
+
+.link {
+  display: block;
+  width: 9cqmin;
+  height: 14cqmin;
+  border-radius: 4.5cqmin;
+  border: 1.8cqmin solid var(--clk-accent);
+  box-sizing: border-box;
+  margin-left: -2.6cqmin;
+}
+
+/* --- Pulse ---------------------------------------------------------------- */
+
+.traceSvg {
+  width: 100%;
+  height: 20cqmin;
+  display: block;
+}
+
+/* --- Pour ----------------------------------------------------------------- */
+
+.tumbler {
+  position: relative;
+  width: 34cqmin;
+  height: 50cqmin;
+  box-sizing: border-box;
+  border: 1cqmin solid var(--clk-ink);
+  border-radius: 2cqmin 2cqmin 7cqmin 7cqmin;
+  overflow: hidden;
+}
+
+.tumblerFill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--clk-accent);
+}
+
+/* --- Sprout --------------------------------------------------------------- */
+
+.sproutStack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.leaf {
+  display: block;
+  width: 5cqmin;
+  height: 5cqmin;
+  border-radius: 50% 50% 50% 0;
+  background: var(--clk-accent);
+  transform: rotate(-45deg);
+  margin-bottom: -0.5cqmin;
+}
+
+.stem {
+  display: block;
+  width: 1.6cqmin;
+  border-radius: 0.8cqmin;
+  background: var(--clk-accent);
+}
+
+.soil {
+  display: block;
+  width: 30cqmin;
+  height: 3.8cqmin;
+  border-radius: 1.9cqmin;
+  background: var(--clk-muted);
+}
+
+/* --- Marquee -------------------------------------------------------------- */
+
+.marqueeStack {
+  display: flex;
+  flex-direction: column;
+  font-size: 38cqmin;
+  font-weight: 700;
+  line-height: 0.92;
+  color: var(--clk-ink);
+}
+
+.marqueeSeconds {
+  color: var(--clk-muted);
+}
+
+.hairTrack {
+  display: block;
+  height: 0.9cqmin;
+  border-radius: 0.5cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 40%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.hairFill {
+  display: block;
+  height: 100%;
+  background: var(--clk-ink);
+}
+
+/* --- Slices --------------------------------------------------------------- */
+
+.pie {
+  width: 52cqmin;
+  height: 52cqmin;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 2cqmin var(--clk-bg),
+    0 2.5cqmin 6cqmin color-mix(in srgb, var(--clk-accent) 20%, transparent);
+}
+
+/* --- Ticks ---------------------------------------------------------------- */
+
+.tickFace {
+  position: relative;
+  width: 66cqmin;
+  height: 66cqmin;
+}
+
+.tick {
+  position: absolute;
+  left: calc(50% - 0.4cqmin);
+  top: 1.5cqmin;
+  width: 0.8cqmin;
+  height: 3.6cqmin;
+  border-radius: 0.4cqmin;
+  transform-origin: 0.4cqmin 31.5cqmin;
+}
+
+/* --- Punchcard ------------------------------------------------------------ */
+
+.punchGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2.4cqmin;
+}
+
+.punch {
+  height: 8cqmin;
+  border-radius: 1.6cqmin;
+  border: 0.5cqmin dashed var(--clk-muted);
+  color: var(--clk-muted);
+  font-size: 3.4cqmin;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.punchDone {
+  border-style: solid;
+  border-color: var(--clk-ink);
+  background: var(--clk-ink);
+  color: var(--clk-bg);
+}
+
+/* --- Wash ----------------------------------------------------------------- */
+
+.washFlood {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: var(--clk-ink);
+}
+
+.washStack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--clk-ink);
+}
+
+.washInverse {
+  color: var(--clk-bg);
+}
+
+.washDigits {
+  font-size: 28cqmin;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* --- Route ---------------------------------------------------------------- */
+
+.routeSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* --- Neon ----------------------------------------------------------------- */
+
+.neonTime {
+  font-size: 18cqmin;
+  color: var(--clk-ink);
+  text-shadow:
+    0 0 2cqmin color-mix(in srgb, var(--clk-ink) 70%, transparent),
+    0 0 8cqmin color-mix(in srgb, var(--clk-ink) 45%, transparent);
+}
+
+.neonSub {
+  font-family: var(--glu-font-sans), sans-serif;
+  font-size: 4cqmin;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--clk-accent);
+  text-shadow: 0 0 6cqmin color-mix(in srgb, var(--clk-accent) 55%, transparent);
+}
+
+.neonTrack {
+  display: block;
+  width: 52cqmin;
+  height: 1.2cqmin;
+  border-radius: 0.6cqmin;
+  background: color-mix(in srgb, var(--clk-muted) 30%, var(--clk-bg));
+  overflow: hidden;
+}
+
+.neonFill {
+  display: block;
+  height: 100%;
+  background: var(--clk-ink);
+  box-shadow: 0 0 3cqmin var(--clk-ink);
+}
+
+/* --- Ledger --------------------------------------------------------------- */
+
+.ledgerHead {
+  align-items: baseline;
+  border-bottom: 0.6cqmin solid var(--clk-ink);
+  padding-bottom: 3cqmin;
+  margin-bottom: 2cqmin;
+}
+
+.ledgerRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 3cqmin;
+  font-size: 3.4cqmin;
+  padding: 2cqmin 0;
+  border-bottom: 0.2cqmin solid color-mix(in srgb, var(--clk-muted) 35%, var(--clk-bg));
+}
+
+.ledgerLabel {
+  color: var(--clk-muted);
+}
+
+/* --- Signal --------------------------------------------------------------- */
+
+.signalRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 3cqmin;
+  height: 42cqmin;
+}
+
+.signalBar {
+  width: 9cqmin;
+  border-radius: 1.6cqmin;
+}
+
+/* --- Blueprint ------------------------------------------------------------ */
+
+.grid28 {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--clk-ink) 12%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--clk-ink) 12%, transparent) 1px, transparent 1px);
+  background-size: 8cqmin 8cqmin;
+}
+
+.dimensionLine {
+  position: relative;
+  flex: 1;
+  height: 0.5cqmin;
+  background: var(--clk-muted);
+}
+
+.dimensionEnd {
+  position: absolute;
+  top: -1.2cqmin;
+  width: 0.5cqmin;
+  height: 3cqmin;
+  background: var(--clk-muted);
+}
+
+.dimensionDot {
+  position: absolute;
+  top: -1cqmin;
+  width: 2.4cqmin;
+  height: 2.4cqmin;
+  margin-left: -1.2cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+}
+
+/* --- Chip ----------------------------------------------------------------- */
+
+.chipPill {
+  display: flex;
+  align-items: center;
+  gap: 3.5cqmin;
+  padding: 4cqmin 7cqmin;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clk-bg) 55%, white);
+  box-shadow:
+    0 0.5cqmin 1.5cqmin color-mix(in srgb, var(--clk-ink) 12%, transparent),
+    0 3.5cqmin 8cqmin color-mix(in srgb, var(--clk-ink) 12%, transparent);
+}
+
+.chipDot {
+  display: block;
+  width: 3cqmin;
+  height: 3cqmin;
+  border-radius: 50%;
+  background: var(--clk-accent);
+}
+
+/* --- Waveform ------------------------------------------------------------- */
+
+.waveRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7cqmin;
+  height: 28cqmin;
+}
+
+.waveBar {
+  flex: 1;
+  border-radius: 0.5cqmin;
+}
+
+/* --- Milestones ----------------------------------------------------------- */
+
+.mileRow {
+  display: flex;
+  align-items: center;
+  gap: 3.5cqmin;
+  padding: 2.2cqmin 0;
+}
+
+.mileDot {
+  width: 5.5cqmin;
+  height: 5.5cqmin;
+  border-radius: 50%;
+  border: 0.5cqmin solid var(--clk-muted);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3cqmin;
+  color: var(--clk-bg);
+  flex: none;
+}
+
+.mileDone {
+  background: var(--clk-accent);
+  border-color: var(--clk-accent);
+}
+
+.mileLabel {
+  font-size: 3.8cqmin;
+  color: var(--clk-ink);
+}
+
+.mileFoot {
+  display: flex;
+  align-items: baseline;
+  gap: 3cqmin;
+  margin-top: 4cqmin;
+  padding-top: 4cqmin;
+  border-top: 0.25cqmin solid color-mix(in srgb, var(--clk-muted) 35%, var(--clk-bg));
+}
+
+/* --- Heat ----------------------------------------------------------------- */
+
+.heatWash {
+  position: absolute;
+  inset: 0;
+}
+
+/* --- Dominoes ------------------------------------------------------------- */
+
+.dominoRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 3.5cqmin;
+  height: 26cqmin;
+}
+
+.domino {
+  display: block;
+  width: 5cqmin;
+  height: 22cqmin;
+  border-radius: 1.2cqmin;
+  transform-origin: bottom right;
+}
+
+/* --- Aperture ------------------------------------------------------------- */
+
+.aperturePlate {
+  width: 58cqmin;
+  height: 58cqmin;
+  border-radius: 50%;
+  background: var(--clk-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iris {
+  border-radius: 50%;
+  background: var(--clk-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.apertureTime {
+  font-size: 9cqmin;
+  font-weight: 500;
+  color: var(--clk-ink);
+  white-space: nowrap;
+}
+
+/* --- Confetti ------------------------------------------------------------- */
+
+.confettiPiece {
+  position: absolute;
+  height: 2.4cqmin;
+  border-radius: 1.2cqmin;
+}
+
+.confettiFoot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10cqmin;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5cqmin;
 }

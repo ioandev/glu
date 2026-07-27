@@ -1,4 +1,10 @@
 import { Router, type Request, type Response } from "express";
+import {
+  commentVocabulary,
+  DEFAULT_COMMENT_LOCALE,
+  resolveCommentLocale,
+  type CommentLocale,
+} from "./commentLocales";
 import { Readable } from "node:stream";
 import type { ServerConfig } from "./config";
 import { requireTokens } from "./authRoutes";
@@ -36,6 +42,10 @@ export interface RawTask {
   child_order?: number;
   is_completed?: boolean;
   url?: string;
+  /** ADR 34 sort keys. `date` is `YYYY-MM-DD` or a full datetime, depending on
+   *  whether the task carries a time; `datetime` appears on older shapes. */
+  due?: { date?: string; datetime?: string } | null;
+  deadline?: { date?: string } | null;
 }
 
 export interface UiTask {
@@ -44,6 +54,7 @@ export interface UiTask {
   description: string;
   /** 1..4 in the UI's sense: 1 = P1 red. */
   uiPriority: 1 | 2 | 3 | 4;
+  projectId: string | null;
   sectionId: string | null;
   order: number;
 }
@@ -83,6 +94,7 @@ export function toUiTask(task: RawTask): UiTask {
     title: toPlainText(task.content ?? ""),
     description: (task.description ?? "").trim(),
     uiPriority: toUiPriority(task.priority),
+    projectId: task.project_id ?? null,
     sectionId: task.section_id ?? null,
     order: task.child_order ?? 0,
   };
@@ -200,6 +212,126 @@ async function collectFilterViews(
   return { items: items.slice(0, TASK_CAP), truncated: truncated || items.length > TASK_CAP };
 }
 
+/**
+ * ADR 34 — **an unsorted Todoist view is not an unordered one.** `/tasks/filter`
+ * returns rows in no defined order; Todoist's own apps sort them client-side
+ * before painting, so we have to as well. Projects are exempt: `section_order`
+ * then `child_order` genuinely is what Todoist shows there.
+ *
+ * The rule is Todoist's documented default for a filter *without* a date query,
+ * applied to every filter and label. Detecting a date query means parsing a
+ * grammar we do not own; a heuristic that is right most of the time produces a
+ * third order that is neither Todoist's nor predictable.
+ */
+
+/** Sorts last when absent — no real key can reach it. */
+const NO_DATE = "￿";
+
+/** `YYYY-MM-DD` sorts before `YYYY-MM-DDT…` on the same day, which is where
+ *  Todoist paints an all-day task: ahead of that day's timed ones. */
+function dueKey(task: RawTask): string {
+  return task.due?.datetime || task.due?.date || NO_DATE;
+}
+
+function deadlineKey(task: RawTask): string {
+  return task.deadline?.date || NO_DATE;
+}
+
+interface RawProject {
+  id: string;
+  parent_id?: string | null;
+  child_order?: number;
+  inbox_project?: boolean;
+  is_inbox_project?: boolean;
+}
+
+/** Sorts after every real project — a task whose project fell outside the
+ *  fetch cap goes last rather than jumping to the front. */
+const UNRANKED: number[] = [Number.MAX_SAFE_INTEGER];
+
+/**
+ * Each project's rank is its path of `child_order` values from the root, so a
+ * parent sorts ahead of its own sub-projects instead of interleaving with them.
+ * Inbox leads, as it does in Todoist's sidebar.
+ */
+export function buildProjectRanks(projects: RawProject[]): Map<string, number[]> {
+  const byId = new Map(projects.map((p) => [String(p.id), p]));
+  const ranks = new Map<string, number[]>();
+
+  const rankOf = (id: string, seen: Set<string>): number[] => {
+    const cached = ranks.get(id);
+    if (cached) return cached;
+    const project = byId.get(id);
+    // Unknown parent, or a cycle in hand-edited data: stop walking, don't hang.
+    if (!project || seen.has(id)) return [];
+    seen.add(id);
+
+    const own = project.inbox_project || project.is_inbox_project ? -1 : (project.child_order ?? 0);
+    const parentId = project.parent_id ? String(project.parent_id) : null;
+    const path = parentId ? [...rankOf(parentId, seen), own] : [own];
+    ranks.set(id, path);
+    return path;
+  };
+
+  for (const project of projects) rankOf(String(project.id), new Set());
+  return ranks;
+}
+
+/**
+ * Best-effort: project order is one key of six, and a degraded order beats an
+ * error page for a list the user is looking at.
+ */
+async function projectRanks(tokens: TokenSet): Promise<Map<string, number[]>> {
+  try {
+    const { items } = await collect<RawProject>(tokens, "/projects", {}, 200);
+    return buildProjectRanks(items);
+  } catch (error) {
+    console.warn(`[glu] project order unavailable, sorting without it: ${(error as Error).message}`);
+    return new Map();
+  }
+}
+
+function comparePaths(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    // Shorter path first: a parent project sits above its own children.
+    const left = a[i] ?? -Infinity;
+    const right = b[i] ?? -Infinity;
+    if (left !== right) return left - right;
+  }
+  return 0;
+}
+
+/**
+ * Priority (descending — API 4 is the UI's P1) → date and time → deadline →
+ * project order → `child_order` → id. Only the first key runs descending;
+ * the last exists so the same list never renders in two different orders.
+ */
+export function compareTasks(
+  a: RawTask,
+  b: RawTask,
+  ranks: Map<string, number[]> = new Map(),
+): number {
+  const priority = (b.priority ?? 1) - (a.priority ?? 1);
+  if (priority !== 0) return priority;
+
+  const due = dueKey(a).localeCompare(dueKey(b));
+  if (due !== 0) return due;
+
+  const deadline = deadlineKey(a).localeCompare(deadlineKey(b));
+  if (deadline !== 0) return deadline;
+
+  const project = comparePaths(
+    ranks.get(String(a.project_id ?? "")) ?? UNRANKED,
+    ranks.get(String(b.project_id ?? "")) ?? UNRANKED,
+  );
+  if (project !== 0) return project;
+
+  const order = (a.child_order ?? 0) - (b.child_order ?? 0);
+  if (order !== 0) return order;
+
+  return String(a.id).localeCompare(String(b.id));
+}
+
 function upstreamStatus(error: unknown): number {
   if (error instanceof TodoistError) {
     // A user-authored filter query that Todoist rejects is a 4xx worth showing.
@@ -304,17 +436,28 @@ export function todoistRoutes(config: ServerConfig): Router {
         path = "/tasks/filter";
         params = { query: `@${query || id}` };
       } else if (type === "filter") {
-        // One request per view — see `collectFilterViews`.
-        const fetched = await collectFilterViews(tokens, query || id);
-        res.json({ items: fetched.items.map(toUiTask), truncated: fetched.truncated, cap: TASK_CAP });
+        // One request per view — see `collectFilterViews` — plus the projects
+        // read ADR 34's fourth sort key needs.
+        const [fetched, ranks] = await Promise.all([
+          collectFilterViews(tokens, query || id),
+          projectRanks(tokens),
+        ]);
+        const sorted = [...fetched.items].sort((a, b) => compareTasks(a, b, ranks));
+        res.json({ items: sorted.map(toUiTask), truncated: fetched.truncated, cap: TASK_CAP });
         return;
       } else {
         res.status(400).json({ error: "unknown_source_type" });
         return;
       }
 
-      const { items, truncated } = await collect<RawTask>(tokens, path, params, TASK_CAP);
-      res.json({ items: items.map(toUiTask), truncated, cap: TASK_CAP });
+      // A project's own order is `section_order` then `child_order`, applied in
+      // the web (ADR 12); only a label needs ADR 34's sort — and its extra read.
+      const [{ items, truncated }, ranks] = await Promise.all([
+        collect<RawTask>(tokens, path, params, TASK_CAP),
+        type === "label" ? projectRanks(tokens) : Promise.resolve(null),
+      ]);
+      const ordered = ranks ? [...items].sort((a, b) => compareTasks(a, b, ranks)) : items;
+      res.json({ items: ordered.map(toUiTask), truncated, cap: TASK_CAP });
     }),
   );
 
@@ -417,6 +560,10 @@ export function todoistRoutes(config: ServerConfig): Router {
       const content = composeTimeComment(
         minutes,
         (req.body as { environment?: unknown })?.environment,
+        // Allowlisted, never trusted — and an unknown value is English rather
+        // than a 400, for the same reason an unknown environment key is
+        // ignored: a vocabulary mismatch must not lose tracked time.
+        resolveCommentLocale((req.body as { locale?: unknown })?.locale),
       );
       const created = await todoistPost<RawComment>(tokens, "/comments", {
         task_id: taskId,
@@ -442,6 +589,8 @@ export function todoistRoutes(config: ServerConfig): Router {
       const commentId = encodeURIComponent(String(req.params.id));
       const [user, comment] = await Promise.all([
         todoistGet<{ id: string }>(tokens, "/user"),
+        // Not HTML — a URL path segment, encodeURIComponent-escaped above.
+        // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
         todoistGet<RawComment>(tokens, `/comments/${commentId}`),
       ]);
 
@@ -673,17 +822,12 @@ export const MAX_COMMENT_MINUTES = 40_320;
  * the TV on" reads like English. Order comes from this array, never from the
  * caller's — an enumerated key buys a word, not a position in the sentence.
  */
-const SOUND_FRAGMENTS = [
-  ["music", "music"],
-  ["podcast", "a podcast"],
-  ["tv", "the TV on"],
-  ["noisy", "background noise"],
-] as const;
+const SOUND_ORDER = ["music", "podcast", "tv", "noisy"] as const;
 
-/** `a`, `a and b`, `a, b and c`. */
-function listPhrase(parts: string[]): string {
+/** `a`, `a and b`, `a, b and c` — in whatever the locale's words for those are. */
+function listPhrase(parts: string[], separator: string, final: string): string {
   if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `${parts.slice(0, -1).join(separator)}${final}${parts[parts.length - 1]}`;
 }
 
 /**
@@ -694,25 +838,31 @@ function listPhrase(parts: string[]): string {
  * the outbox's permanent-failure path and lose tracked time over a vocabulary
  * mismatch.
  */
-export function environmentSuffix(raw: unknown): string {
+export function environmentSuffix(
+  raw: unknown,
+  locale: CommentLocale = DEFAULT_COMMENT_LOCALE,
+): string {
   if (!Array.isArray(raw)) return "";
   // A Set is the dedupe: repeats cannot lengthen the sentence.
   const on = new Set(raw.filter((key): key is string => typeof key === "string"));
+  const words = commentVocabulary(locale);
 
   const clauses: string[] = [];
-  const sounds = SOUND_FRAGMENTS.filter(([key]) => on.has(key)).map(([, phrase]) => phrase);
+  const sounds = SOUND_ORDER.filter((key) => on.has(key)).map((key) => words.sounds[key]);
   if (sounds.length > 0) {
-    clauses.push(`with ${listPhrase(sounds)}`);
+    clauses.push(words.withSounds(listPhrase(sounds, words.listSeparator, words.listFinal)));
   } else if (on.has("silence")) {
     // ADR 02's exclusivity re-applied server-side: the reducer already
     // guarantees it client-side, but "in silence, with the TV on" must stay out
     // of the ledger even when the caller is not our UI.
-    clauses.push("in silence");
+    clauses.push(words.silence);
   }
   // Orthogonal equipment, so it is its own clause (ADR 02's rule, in grammar).
-  if (on.has("headphones")) clauses.push("on headphones");
+  if (on.has("headphones")) clauses.push(words.headphones);
 
-  return clauses.length === 0 ? "" : ` — ${clauses.join(", ")}`;
+  return clauses.length === 0
+    ? ""
+    : `${words.suffixSeparator}${clauses.join(words.clauseSeparator)}`;
 }
 
 /**
@@ -723,9 +873,17 @@ export function environmentSuffix(raw: unknown): string {
  * reads past the anchor, so every existing comment stays valid, totals keep
  * summing, and the DELETE guard keeps recognising our own comments.
  */
-export function composeTimeComment(minutes: number, environment?: unknown): string {
-  const unit = minutes === 1 ? "minute" : "minutes";
-  return `[${minutes}m] You spent ${minutes} ${unit} on this${environmentSuffix(environment)}`;
+export function composeTimeComment(
+  minutes: number,
+  environment?: unknown,
+  locale: CommentLocale = DEFAULT_COMMENT_LOCALE,
+): string {
+  const words = commentVocabulary(locale);
+  const sentence = words.sentence(minutes, words.unit(minutes));
+  // The `[Nm]` prefix is **never** localised: it is what `parseTimeComment` and
+  // the DELETE guard anchor on, so it has to read the same in every language and
+  // in every comment already written (ADR 44).
+  return `[${minutes}m] ${sentence}${environmentSuffix(environment, locale)}`;
 }
 
 /**

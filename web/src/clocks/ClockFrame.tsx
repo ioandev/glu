@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import type { ClockTheme } from "@/theme/palette";
 import type { TimerStatus } from "@/store/types";
 import classes from "./clock.module.css";
@@ -52,13 +53,35 @@ export function ClockFrame({
 /**
  * The one place a clock's status copy is decided. Per-state artwork is future
  * polish (ADR 07); a state-aware label is what makes paused and finished render
- * sanely on all 18 designs today.
+ * sanely on every design today.
  */
-export function stateLabel(state: TimerStatus, running = "Focus"): string {
-  if (state === "paused") return "Paused";
-  if (state === "finished") return "Done";
-  if (state === "idle") return "Ready";
-  return running;
+export type ClockLabelKey = Parameters<ReturnType<typeof useClockTranslations>>[0];
+
+/** Just `useTranslations("clock")`, named so the key type above can be derived. */
+function useClockTranslations() {
+  return useTranslations("clock");
+}
+
+/**
+ * The status word under (or inside) every clock face.
+ *
+ * Designs pass a **key**, never a sentence (ADR 44) — `label(state, "orbit")`,
+ * not `label(state, "Orbit")`. That is what keeps thirty-nine call sites from
+ * each having to reach for `useTranslations`, and it is why a design's wording
+ * is a catalog entry rather than a literal buried in a chart.
+ *
+ * A hook rather than a plain function because the words come from the request's
+ * locale; the three non-running states are shared by every design, so only the
+ * running one is ever passed in.
+ */
+export function useStateLabel(): (state: TimerStatus, running?: ClockLabelKey) => string {
+  const t = useClockTranslations();
+  return (state, running) => {
+    if (state === "paused") return t("paused");
+    if (state === "finished") return t("done");
+    if (state === "idle") return t("ready");
+    return t(running ?? "focus");
+  };
 }
 
 /** Session copy: a bare count, never "N/target" — GLU has no target concept. */

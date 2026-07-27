@@ -1,4 +1,4 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -24,6 +24,7 @@ export const auroraTheme: ClockTheme = {
 };
 
 export function Aurora({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const stateLabel = useStateLabel();
   const p = clockProgress(remainingMs, totalMs);
   // The glow tracks the run: two fixed-size pre-blurred layers, not
   // viewport-sized filters — those are GPU-expensive on a tablet (ADR 07).

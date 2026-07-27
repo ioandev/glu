@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useHotkeys } from "@mantine/hooks";
+import { stopAlertSound } from "@/lib/alertSounds";
 import { useGluStore } from "@/store/gluStore";
 
 /**
@@ -42,6 +43,7 @@ export function useTimerHotkeys() {
       // kills copy.
       if ((window.getSelection()?.toString() ?? "") !== "") return;
       event.preventDefault();
+      stopAlertSound();
       stop();
     };
     window.addEventListener("keydown", onKeyDown);
@@ -52,6 +54,9 @@ export function useTimerHotkeys() {
 function guard(event: KeyboardEvent | undefined, action: () => void) {
   // A held key must not machine-gun the action.
   if (event?.repeat) return;
+  // ADR 40: a transport key is an acknowledgment, exactly like the button —
+  // whichever surface the user reaches for, a sound in flight stops.
+  stopAlertSound();
   action();
 }
 

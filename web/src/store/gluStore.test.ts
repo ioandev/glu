@@ -587,6 +587,92 @@ describe("wake-lock preferences (ADR 17 amendment)", () => {
   });
 });
 
+describe("alert sound preferences (ADR 40)", () => {
+  it("defaults to ADR 18's chime, played once", () => {
+    expect(store().alertSoundId).toBe("chime");
+    expect(store().alertDurationSeconds).toBe(0);
+  });
+
+  it("both fields persist into the blob", () => {
+    freezeClock();
+    store().setAlertSoundId("bell");
+    store().setAlertDurationSeconds(10);
+
+    const raw = window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION));
+    expect(JSON.parse(raw!).state).toMatchObject({
+      alertSoundId: "bell",
+      alertDurationSeconds: 10,
+    });
+  });
+
+  it("stores only resolved values", () => {
+    store().setAlertSoundId("gong");
+    store().setAlertDurationSeconds(999);
+    expect(store().alertSoundId).toBe("chime");
+    expect(store().alertDurationSeconds).toBe(0);
+  });
+
+  it("a blob written before the fields existed reads back at the defaults", async () => {
+    freezeClock();
+    const { alertSoundId, alertDurationSeconds, ...before } = initialPersistedState();
+    void alertSoundId;
+    void alertDurationSeconds;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({ version: CURRENT_BLOB_VERSION, state: { ...before, remaining: 7 * MINUTE } }),
+    );
+
+    await useGluStore.persist.rehydrate();
+
+    // Additive fields, no version bump: the defaults fill in, nothing migrates.
+    expect(store().alertSoundId).toBe("chime");
+    expect(store().alertDurationSeconds).toBe(0);
+    expect(store().remaining).toBe(7 * MINUTE);
+    expect(window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION + 1))).toBeNull();
+  });
+
+  it("neither setting touches the timer", () => {
+    const t0 = freezeClock();
+    store().start();
+    store().setAlertSoundId("deep");
+    store().setAlertDurationSeconds(20);
+    expect(store()).toMatchObject({ status: "running", endAt: t0 + 20 * MINUTE });
+  });
+
+  /** ADR 41 — the blob's first quota field. */
+  it("persists the ask budget and reads a pre-field blob as nothing spent", async () => {
+    freezeClock();
+    store().noteAlertPrompt();
+    store().noteAlertPrompt();
+    expect(
+      JSON.parse(window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION))!).state
+        .alertPromptsUsed,
+    ).toBe(2);
+
+    const { alertPromptsUsed, ...before } = initialPersistedState();
+    void alertPromptsUsed;
+    window.localStorage.setItem(
+      blobKey(CURRENT_BLOB_VERSION),
+      JSON.stringify({ version: CURRENT_BLOB_VERSION, state: before }),
+    );
+    // A page load, not a mid-session re-read: `merge` keeps the *current* value
+    // for a field the blob omits, and on a real load current is the default.
+    resetGluStore();
+    await useGluStore.persist.rehydrate();
+
+    // Absent means zero, which is the honest reading — and no version bump.
+    expect(store().alertPromptsUsed).toBe(0);
+    expect(window.localStorage.getItem(blobKey(CURRENT_BLOB_VERSION + 1))).toBeNull();
+  });
+
+  it("counts up from a corrupt budget rather than freezing at NaN", () => {
+    freezeClock();
+    useGluStore.setState({ alertPromptsUsed: -4 });
+    store().noteAlertPrompt();
+    expect(store().alertPromptsUsed).toBe(1);
+  });
+});
+
 describe("persistence write discipline (ADR 02/03)", () => {
   it("writes on transitions and never on a tick", () => {
     const t0 = freezeClock();

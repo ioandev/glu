@@ -2,7 +2,21 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, within } from "storybook/test";
 import { WelcomeContent } from "./WelcomeContent";
 import { EnterAppButton } from "./EnterAppButton";
-import { WELCOME_CTA, WELCOME_HEADLINE, welcomeFeatures } from "./WelcomeSections";
+import en from "@/locales/en";
+
+/*
+ * The English catalog is the source of these strings now (ADR 44), so the
+ * assertions read them from it rather than from a constant that no longer
+ * exists — same property as before: the test cannot drift from the copy.
+ */
+const WELCOME_CTA = en.welcome.cta;
+const WELCOME_HEADLINE = en.welcome.headline;
+const welcomeFeatures = [
+  { title: en.welcome.featureClockTitle },
+  { title: en.welcome.featureEnvironmentTitle },
+  { title: en.welcome.featureRecordTitle },
+  { title: en.welcome.featureTodoistTitle },
+];
 
 /**
  * ADR 31. As with the legal pages (ADR 26) and the manual (ADR 29), the real

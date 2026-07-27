@@ -145,6 +145,8 @@ describe("the App Console verification token (ADR 11 amendment)", () => {
 
   /** Signed from scratch here, so the suite can't rubber-stamp `session.ts`. */
   const sign = (nonce: string) =>
+    // Test fixture, not a credential — the "key" is this suite's own constant.
+    // nosemgrep: javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key
     createHmac("sha256", VERIFICATION_TOKEN).update(nonce).digest("base64url");
 
   const callback = (state: string) =>

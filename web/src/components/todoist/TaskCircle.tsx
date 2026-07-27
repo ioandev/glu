@@ -2,6 +2,7 @@
 
 import { UnstyledButton } from "@mantine/core";
 import { IconCheck } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { PRIORITY_COLOR } from "./types";
 import classes from "./todoist.module.css";
 
@@ -26,6 +27,7 @@ export function TaskCircle({
   completed?: boolean;
   onComplete?: () => void;
 }) {
+  const t = useTranslations("todoist");
   const ring = { borderColor: PRIORITY_COLOR[priority] };
 
   if (!onComplete) {
@@ -35,7 +37,7 @@ export function TaskCircle({
         style={ring}
         data-priority={priority}
         role="img"
-        aria-label={`Priority ${priority}`}
+        aria-label={t("priority", { level: priority })}
       />
     );
   }
@@ -43,7 +45,7 @@ export function TaskCircle({
   return (
     <UnstyledButton
       className={classes.circleHalo}
-      aria-label={`Complete “${title}”`}
+      aria-label={t("completeTask", { title })}
       aria-pressed={completed}
       onClick={onComplete}
       data-completed={completed || undefined}

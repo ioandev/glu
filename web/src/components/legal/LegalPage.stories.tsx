@@ -1,7 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, within } from "storybook/test";
-import { PrivacyContent } from "./PrivacyContent";
-import { TermsContent } from "./TermsContent";
+import { LegalPage } from "./LegalPage";
+import privacyEn from "./content/privacy/en";
+import termsEn from "./content/terms/en";
+
+/*
+ * The two documents are rendered through the shell directly rather than through
+ * `PrivacyContent` / `TermsContent` (ADR 44): those are now `async` server
+ * components that resolve the reader's language, and Storybook renders in the
+ * browser. Pinning English here is also the honest thing — these stories assert
+ * English headings, and the a11y gate they exist for is about the *treatment*,
+ * which every language shares.
+ */
+const PrivacyDocument = () => <LegalPage {...privacyEn} />;
+const TermsDocument = () => <LegalPage {...termsEn} />;
 
 /**
  * ADR 26. The real check here is the a11y addon's contrast gate, run in both
@@ -12,9 +24,9 @@ import { TermsContent } from "./TermsContent";
  */
 const meta = {
   title: "Legal/LegalPage",
-  component: PrivacyContent,
+  component: PrivacyDocument,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof PrivacyContent>;
+} satisfies Meta<typeof PrivacyDocument>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -44,7 +56,7 @@ export const PrivacyPhone: Story = {
 
 export const Terms: Story = {
   globals: { viewport: { value: "tablet" } },
-  render: () => <TermsContent />,
+  render: () => <TermsDocument />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
@@ -64,5 +76,5 @@ export const Terms: Story = {
 
 export const TermsPhone: Story = {
   globals: { viewport: { value: "halfTablet" } },
-  render: () => <TermsContent />,
+  render: () => <TermsDocument />,
 };

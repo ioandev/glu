@@ -1,0 +1,14 @@
+# Semgrep ignores (ADR 38). NOTE: this file REPLACES semgrep's built-in
+# default ignore list, so the defaults GLU relies on are restated first.
+node_modules/
+.git/
+dist/
+.next/
+storybook-static/
+playwright-report/
+test-results/
+
+# Static design-mockup viewers (ADR 07/15 reference material, never shipped
+# or served by the app) — 16 of the baseline's findings lived in their
+# bundled support.js, none of them reachable.
+docs/design/

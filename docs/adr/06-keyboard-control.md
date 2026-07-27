@@ -53,7 +53,9 @@ whichever lands second inherits no surprises.
   dependency, matches modifiers exactly (bare `s` won't fire on Ctrl+S), and
   ignores input/textarea/select by default. No new library for four bindings.
 - **Discoverability via the existing buttons**: `Tooltip` («Stop — S») and
-  `aria-keyshortcuts` on Stop/Pause. `n` is keyboard-only (it has no button and
+  `aria-keyshortcuts` on Stop/Pause. *(ADR 37, 2026-07-26: Pause is now the
+  primary transport button relabelling itself, so the affordance appears on it
+  only in `running`/`paused` — the two states where `p` does anything.)* `n` is keyboard-only (it has no button and
   gets none — the touch flow is Stop then Start). A shortcut legend/overlay is
   not warranted at four bindings → future **ADR: shortcut help** if the roster
   grows.
@@ -141,7 +143,7 @@ value is in the guards, and every guard above has a named test because
 - [x] Ctrl+P and Ctrl+N reach the browser (print dialog / new window) — the app neither pauses nor restarts on them.
 - [x] With focus in a text input (plant one via devtools if none exists yet): `s`, `p`, `n` type letters and the timer is unaffected.
 - [x] Holding `n` for two seconds produces exactly one restart.
-- [x] The Stop and Pause buttons show their shortcut in a tooltip and expose `aria-keyshortcuts`.
+- [x] The Stop and Pause buttons show their shortcut in a tooltip and expose `aria-keyshortcuts`. *(ADR 37: the Pause half is now the primary button, in `running`/`paused` only.)*
 - [x] All ADR 03-style tests for the checklist above exist, named traceably, and pass; `npm test` and `npm run build` are green.
 
 ## Consequences

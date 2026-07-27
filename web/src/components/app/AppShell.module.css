@@ -107,7 +107,7 @@
   /* Below `sm` the clock runs full-bleed under this corner (ADR 08 amendment),
      so ADR 10's arrow now sits on clock paint rather than on the page. It gets
      the same token surface the swipe hint uses, which is what keeps it legible
-     on all 18 backgrounds in both schemes. */
+     on every clock background in both schemes. */
   background: var(--glu-surface-strong);
   border: var(--glu-border);
   border-radius: var(--glu-control-radius);

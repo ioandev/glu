@@ -14,6 +14,7 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { apiFetch } from "@/lib/api";
 import type { NamedItem, SourceType, TodoistSource } from "./types";
 import classes from "./todoist.module.css";
@@ -23,14 +24,6 @@ const ENDPOINT: Record<SourceType, string> = {
   label: "/todoist/labels",
   project: "/todoist/projects",
 };
-
-const TYPES = [
-  { value: "filter", label: "Filter" },
-  { value: "label", label: "Label" },
-  { value: "project", label: "Project" },
-];
-
-const HINT = "Sections of a project show one after another, in Todoist’s order.";
 
 function toSource(type: SourceType, picked: NamedItem): TodoistSource {
   return {
@@ -103,6 +96,21 @@ export function SourcePicker({
   const [type, setType] = useState<SourceType>(source?.type ?? "project");
   const { items, loading, failed } = useSourceItems(type, opened);
   const fullScreen = useMediaQuery("(max-width: 48em)") ?? false;
+  const t = useTranslations("todoist");
+  const tError = useTranslations("errors");
+
+  // The three kinds are words, not a stem plus a suffix (ADR 44): "Choose a
+  // {type}" and `${type}s` only ever worked in English.
+  const types = [
+    { value: "filter", label: t("sourceFilter") },
+    { value: "label", label: t("sourceLabel") },
+    { value: "project", label: t("sourceProject") },
+  ];
+  const chooseLabel = {
+    filter: t("chooseFilter"),
+    label: t("chooseLabel"),
+    project: t("chooseProject"),
+  }[type];
 
   const pick = (picked: NamedItem) => {
     onPick(toSource(type, picked));
@@ -112,7 +120,7 @@ export function SourcePicker({
   const trigger = (
     <UnstyledButton
       className={classes.toolsButton}
-      aria-label="Choose task source"
+      aria-label={t("chooseSource")}
       aria-expanded={opened}
       aria-haspopup={fullScreen ? "dialog" : undefined}
       onClick={() => setOpened((o) => !o)}
@@ -126,7 +134,7 @@ export function SourcePicker({
       fullWidth
       value={type}
       onChange={(value) => setType(value as SourceType)}
-      data={TYPES}
+      data={types}
     />
   );
 
@@ -137,10 +145,10 @@ export function SourcePicker({
         <Modal
           opened={opened}
           onClose={() => setOpened(false)}
-          title="Task source"
+          title={t("sourceTitle")}
           centered
           transitionProps={{ duration: 0 }}
-          closeButtonProps={{ "aria-label": "Close task source" }}
+          closeButtonProps={{ "aria-label": t("closeSource") }}
           classNames={{
             content: classes.pickerModal,
             header: classes.pickerModalHeader,
@@ -160,7 +168,7 @@ export function SourcePicker({
             onPick={pick}
           />
           <Text size="xs" c="dimmed">
-            {HINT}
+            {t("sourceHint")}
           </Text>
         </Modal>
       </>
@@ -179,7 +187,7 @@ export function SourcePicker({
       <Popover.Target>{trigger}</Popover.Target>
 
       <Popover.Dropdown className={classes.pickerDropdown}>
-        <Stack gap="sm" role="group" aria-label="Task source">
+        <Stack gap="sm" role="group" aria-label={t("sourceTitle")}>
           {segments}
           <Select
             searchable
@@ -187,9 +195,9 @@ export function SourcePicker({
             // out, clicking an option counts as an outside click and Mantine
             // closes the popover before `onChange` ever fires.
             comboboxProps={{ withinPortal: false }}
-            aria-label={`Choose a ${type}`}
-            placeholder={loading ? "Loading…" : `Choose a ${type}`}
-            nothingFoundMessage={failed ? "Could not reach Todoist." : "Nothing here."}
+            aria-label={chooseLabel}
+            placeholder={loading ? t("loading") : chooseLabel}
+            nothingFoundMessage={failed ? tError("unreachable") : t("nothingHere")}
             data={items.map((item) => ({ value: item.id, label: item.name }))}
             value={source?.type === type ? source.id : null}
             onChange={(value) => {
@@ -198,7 +206,7 @@ export function SourcePicker({
             }}
           />
           <Text size="xs" c="dimmed">
-            {HINT}
+            {t("sourceHint")}
           </Text>
         </Stack>
       </Popover.Dropdown>
@@ -231,6 +239,15 @@ export function SourceOptionList({
   // options, even though nothing is portalled here.
   const combobox = useCombobox({ defaultOpened: true });
   const [search, setSearch] = useState("");
+  const t = useTranslations("todoist");
+  const tError = useTranslations("errors");
+
+  const chooseLabel = {
+    filter: t("chooseFilter"),
+    label: t("chooseLabel"),
+    project: t("chooseProject"),
+  }[type];
+  const listLabel = { filter: t("filters"), label: t("labels"), project: t("projects") }[type];
 
   const query = search.trim().toLowerCase();
   const shown = query ? items.filter((item) => item.name.toLowerCase().includes(query)) : items;
@@ -249,14 +266,14 @@ export function SourceOptionList({
           setSearch(event.currentTarget.value);
           combobox.resetSelectedOption();
         }}
-        aria-label={`Choose a ${type}`}
-        placeholder={loading ? "Loading…" : `Choose a ${type}`}
+        aria-label={chooseLabel}
+        placeholder={loading ? t("loading") : chooseLabel}
         classNames={{ input: classes.pickerSearch }}
       />
       {/* An empty `listbox` is an axe violation (`aria-required-children`), so
           the empty case replaces the list rather than sitting inside it. */}
       {shown.length > 0 ? (
-        <Combobox.Options className={classes.pickerOptions} aria-label={`${type}s`}>
+        <Combobox.Options className={classes.pickerOptions} aria-label={listLabel}>
           {shown.map((item) => (
             <Combobox.Option
               key={item.id}
@@ -274,7 +291,7 @@ export function SourceOptionList({
         </Combobox.Options>
       ) : (
         <div className={classes.pickerEmpty} role="status">
-          {failed ? "Could not reach Todoist." : loading ? "Loading…" : "Nothing here."}
+          {failed ? tError("unreachable") : loading ? t("loading") : t("nothingHere")}
         </div>
       )}
     </Combobox>

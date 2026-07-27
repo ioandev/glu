@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { intlWrapper } from "@/test/intl";
 import { MINUTE } from "@/lib/time";
 import { initialPersistedState, resetGluStore, useGluStore } from "@/store/gluStore";
 import { blobKey } from "@/store/storage";
@@ -64,7 +65,7 @@ describe("the comment records the room the run happened in (ADR 27)", () => {
 
   it("snapshots the toggles that were on at run end", () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => {
       store().toggleEnvironment("music");
@@ -77,7 +78,7 @@ describe("the comment records the room the run happened in (ADR 27)", () => {
 
   it("records nothing when the setting is off, and turning it on later changes nothing", async () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => {
       store().toggleEnvironment("music");
@@ -94,12 +95,13 @@ describe("the comment records the room the run happened in (ADR 27)", () => {
     });
 
     await waitFor(() => expect(postedBodies()).toHaveLength(1));
-    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 5 });
+    // ADR 44: the wire carries a locale code beside the enumerated keys.
+    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 5, locale: "en" });
   });
 
   it("moving rooms between the run and the retry does not rewrite history", async () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => store().toggleEnvironment("music"));
     runAQualifyingRun(t0);
@@ -116,6 +118,7 @@ describe("the comment records the room the run happened in (ADR 27)", () => {
       taskId: "t1",
       minutes: 5,
       environment: ["music"],
+      locale: "en",
     });
   });
 
@@ -127,11 +130,12 @@ describe("the comment records the room the run happened in (ADR 27)", () => {
       store().enqueueComment({ runId: "r1", taskId: "t1", minutes: 5, postAfter: 0, attempts: 0 });
     });
 
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
     act(() => vi.setSystemTime(t0 + 1000));
 
     await waitFor(() => expect(postedBodies()).toHaveLength(1));
-    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 5 });
+    // ADR 44: the wire carries a locale code beside the enumerated keys.
+    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 5, locale: "en" });
   });
 });
 

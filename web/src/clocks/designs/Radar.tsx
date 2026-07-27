@@ -1,4 +1,4 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -31,6 +31,7 @@ export function Radar({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
   const p = clockProgress(remainingMs, totalMs);
   // Needle and trail move by `transform`/`rotate` only — regenerating the conic
   // gradient 20x a second is jank on an old tablet (ADR 07).
@@ -51,7 +52,7 @@ export function Radar({
             {p.time}
           </span>
           <span className={classes.label} data-testid={showSession ? "clock-session" : undefined}>
-            {stateLabel(state, "Scanning")}
+            {stateLabel(state, "scanning")}
             {showSession ? ` \u00b7 ${session}` : ""}
           </span>
         </div>

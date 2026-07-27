@@ -16,7 +16,8 @@ and an ADR disagree, the ADR wins and this file gets fixed.
 
 Both must work in **dark and light**, and on top of that the **active clock
 design recolors the whole page** (background + text accents from its
-palette — 18 clocks × 2 schemes = 36 combinations). Chrome sits on neutral
+palette — every clock × 2 schemes; the roster's size lives in `CLOCK_COUNT`
+and nowhere else, ADR 42). Chrome sits on neutral
 surface tokens so it stays legible on all of them. (ADRs 02, 07, 08)
 
 Every interactive element: **≥ 44 px** touch target. This is used with
@@ -38,7 +39,7 @@ fingers, sometimes mid-focus, sometimes half-asleep.
 │        │           │           │  └────────────────────────────┘ │
 │        └───────────┘           │                                 │
 │                                │                                 │
-│   [ Start ] [ Pause ] [ Stop ] │                                 │
+│      [ Start ] [ Stop ]        │                                 │
 │      [+1] [+5] [−1] [−5]       │  environment toggles            │
 │                                │  (Music)(Podcast)(TV)           │
 │   session dots ●●●○ · New day  │  (Silence)(Noisy)(Headphones)   │
@@ -55,9 +56,15 @@ fingers, sometimes mid-focus, sometimes half-asleep.
    ± has been used with no run in flight, the resulting length joins the row
    *in sorted position*, looking exactly like a preset, and stays selected
    until a preset is tapped. Anything assuming seven buttons is wrong.
-2. **The clock** — the hero. One of **18 fixed clock designs** (ADR 07:
-   Halo, Meridian, Broadside, Aurora, Mono, Stack, Orbit, Field, Eclipse,
-   Grid, Terminal, Sunset, Pill, Tide, Split-flap, Radar, Bauhaus, Edge).
+2. **The clock** — the hero. One of a **fixed roster of clock designs**
+   (ADR 07: Halo, Meridian, Broadside, Aurora, Mono, Stack, Orbit, Field,
+   Eclipse, Grid, Terminal, Sunset, Pill, Tide, Split-flap, Radar, Bauhaus,
+   Edge; ADR 42 adds Hourglass, Segment, Meter, Nixie, Nest, Lunar, Candle,
+   Steps, LCD, Spiral, Soft, Glass, Comet, Barcode, Cell, Wedge, Words,
+   Prism, Pixels, Tempo, Mercury, Ghost; ADR 45 adds a third sheet of
+   forty-six more, drawn as stopwatches and re-pointed at a countdown).
+   **How many there are is `CLOCK_COUNT`, derived from the registry — never
+   write the number down.**
    **These designs are already specified — do not restyle them**
    (`docs/design/clocks/` is their spec). Design *around* them: the gallery
    affordance is horizontal swipe plus chevrons flanking the clock — and the
@@ -66,9 +73,12 @@ fingers, sometimes mid-focus, sometimes half-asleep.
    clock to switch designs" instead (ADR 08 amendment). Flips **slide in the
    direction of travel**, clipped to the clock slot (ADR 25). Default clock:
    Halo.
-3. **Transport controls**: Start / Pause / Stop — the biggest touch targets
-   on the page. Keyboard equivalents exist (ADR 06: s, p, n, Ctrl+C);
-   Stop and Pause buttons carry their shortcut in a tooltip.
+3. **Transport controls** (ADR 37): two buttons — a primary that reads
+   **Start** when idle or finished, **Pause** while running and **Resume**
+   when paused, plus **Stop**. The biggest touch targets on the page, and
+   neither is ever disabled. Keyboard equivalents exist (ADR 06: s, p, n,
+   Ctrl+C); Stop carries its shortcut in a tooltip, and the primary does too
+   in running/paused.
 4. **Adjust row**: +1 / +5 / −1 / −5 minutes.
 5. **Session strip**: one dot per completed session today (cap 12, then
    "+N"), a count, and a **"New day"** button that asks for confirmation in
@@ -104,7 +114,9 @@ visually distinct, silent), plus the time text never jittering
   title, one ellipsized description line only when present, and a small
   **focus button** per card. Project sources show **section headers** in
   order, no-section tasks first. List scrolls **internally**; shows
-  "showing first 200" when truncated. Empty state: a one-line hint pointing
+  "showing first 200" when truncated. Each section honours the **item
+  ceiling** (ADR 39, Settings → Tasks; All by default) and shows a tappable
+  `+N more` when it has one — muted list typography, never a card. Empty state: a one-line hint pointing
   at the tools icon.
 
 **Bottom-right — environment toggles** (ADR 02): six chips — Music,
@@ -121,10 +133,28 @@ permanently visible chrome. It opens the **header drawer**.
   link (icon + label), dark/light toggle row, **Docs row** (ADR 29) and
   Settings row. Settings opens
   a **near-full-size modal** (full-screen below 48em) laid out as a
-  **section list** (ADR 19): **Todoist** — account name + Log out, or the
-  branded login when logged out — **Screen** (ADR 17 amendment) — two
+  **section list** (ADR 19): **Language** (ADR 44) — deliberately the **first**
+  section, because it is the one setting a reader might need while unable to
+  read the rest. A `Select` rather than a ladder, and the only settings row that
+  is not a `SegmentedControl`: seven options (Automatic, then English, Español,
+  简体中文, Français, Português, Deutsch) do not fit one row on a half-tablet, and
+  a language is scanned for rather than compared. **Automatic** is the default
+  and follows the browser; the endonyms are never translated. Choosing one
+  re-renders the whole app — chrome, timer, Todoist, `<html lang>` and the
+  `<title>` — without a reload — **Todoist** — account name + Log out, or the
+  branded login when logged out — **Tasks** (ADR 39) — one **"Limit the items
+  in a section to" ladder** (10 / 20 / 50 / 100 / All, **All** by default; a
+  section past the ceiling shows a tappable `+N more`, which lifts it for that
+  visit only) — **Screen** (ADR 17 amendment) — two
   switches, "Stay awake on the website" (off by default) and "Stay awake
-  when the timer is running" (on) — and **Time comments** — a **"Minimum time
+  when the timer is running" (on) — **Alerts** (ADR 40) — a **nine-button sound
+  grid** (Chime by default, then Bell, Wood, Rise, Settle, Pulse, Digital,
+  Glass, Deep; two columns below 48em, three above) over a **"How long it
+  plays" ladder** (Once by default, then 3 / 5 / 10 / 20 s); **every tap here
+  previews the real thing** — selected sound, selected length — any tap cancels
+  the previous preview, tapping the playing sound stops it, and closing
+  Settings stops it too; the playing button carries an inset ring on the accent
+  fill — and **Time comments** — a **"Minimum time
   to log" ladder** (ADR 28: 1 / 2 / 5 / 10 / 15 min, 1 min by default; a run
   shorter than the chosen rung posts no comment) above one
   switch, "Say how you worked" (on, ADR 27), itself above **two live previews** of the
@@ -249,7 +279,7 @@ bottom, and the Halo progress ring bleeding off the right edge.
 It is the **only** GLU surface that cannot switch chrome or clock, because it
 is a static PNG. So it is fixed to the identity that does not move: the default
 chrome direction (Studio Quiet) in dark, mixed with the *neutral* palette
-rather than any one of the eighteen clocks. Every colour still comes out of
+rather than any one of the clock palettes. Every colour still comes out of
 ADR 15's `resolveScheme`, called at build — a literal here is the same review
 defect it is anywhere else. It is set in `next/og`'s bundled face, not GLU's
 three: satori cannot read the WOFF2 that `next/font` produces, so the card
@@ -261,7 +291,7 @@ changes without its blurb is the drift that table exists to prevent.
 
 ## Fixed constraints (not design-negotiable)
 
-- The 18 clock designs and their palettes (ADR 07) — design the chrome to
+- The clock designs and their palettes (ADRs 07, 42) — design the chrome to
   survive them, not the other way around.
 - Todoist brand button and priority colors — theirs, not ours.
 - Dark/light parity everywhere; no flash on load; scheme toggle lives in
@@ -296,12 +326,12 @@ decided there. Still open for future design passes:
   ADR 15 token layer along with it is deliberately still open).
 - Split-flap digit flip animation (ADR 07 ships static digits).
 - A lightbox for comment images (ADR 13 ships inline only).
-- A position indicator for the 18-clock gallery (ADR 08 deliberately
+- A position indicator for the clock gallery (ADR 08 deliberately
   shipped none — bring evidence it's needed).
 - Empty-state illustrations, micro-interactions on session dots, a nicer
   "+N" overflow treatment.
-- A richer treatment for the settings section list — it carries three
-  sections today (Todoist, Screen, Time comments) and grows one row per ADR
+- A richer treatment for the settings section list — it carries four
+  sections today (Todoist, Tasks, Screen, Time comments) and grows one row per ADR
   amendment; the skeleton is deliberately plain until it has enough rows to
   design against. ADR 27's preview pair is the first content in there worth
   designing around, and ADR 28's ladder is the first row that is not a

@@ -95,6 +95,24 @@
   text-transform: none;
 }
 
+/* ADR 41: what to do about a permission GLU cannot change. It borrows the
+   task list's error treatment — `--glu-accent-text`, which is the one ink that
+   reads as "attend to this" and still clears the contrast gate on every chrome
+   surface (a red of our own would be the first hardcoded colour in the app). */
+.fieldError {
+  font-family: var(--glu-label-family);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--glu-accent-text);
+  text-transform: none;
+}
+
+/* A disabled switch still has to look disabled: the label colour above is set
+   by an unlayered class, so Mantine's own dimming never lands (ADR 37). */
+.switch:has(input:disabled) :global(.mantine-Switch-label) {
+  color: var(--glu-muted);
+}
+
 /* Mantine's own palette would ignore the chrome direction entirely, so every
    surface here is repointed at a token: `--sc-color` is the moving indicator
    and `--sc-label-color` the text riding on it — both variables Mantine reads
@@ -124,6 +142,108 @@
    4.5:1 on every surface, `--glu-on-accent` on the accent fill. */
 .segmented :global(.mantine-SegmentedControl-label[data-active]) {
   color: var(--glu-on-accent);
+}
+
+/* ADR 44: the language list. A `Select` rather than a segmented control —
+   seven options do not fit a half-tablet row, and a language is scanned for
+   rather than compared.
+
+   Every surface is repointed at a chrome token for the same reason `.segmented`
+   is: Mantine's own palette does not move when the chrome direction does. Note
+   that these rules are *unlayered* and Mantine ships inside `@layer mantine`
+   (ADR 37), so they win outright — which also means the states Mantine would
+   have painted (hover, focus, the selected option) have to be restated here
+   rather than inherited. */
+.select :global(.mantine-Select-input) {
+  min-height: 44px;
+  margin-top: 4px;
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  color: var(--glu-text);
+  font-family: var(--glu-label-family);
+  letter-spacing: var(--glu-label-tracking);
+}
+
+.select :global(.mantine-Select-input:focus-visible) {
+  outline: 2px solid var(--glu-accent);
+  outline-offset: 2px;
+}
+
+.select :global(.mantine-Select-dropdown) {
+  background: var(--glu-surface);
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+}
+
+/* The 44 px floor applies inside the dropdown too — these are the actual
+   targets, the closed input is only the door (ADR 19). */
+.select :global(.mantine-Select-option) {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--glu-text);
+  border-radius: var(--glu-control-radius);
+}
+
+.select :global(.mantine-Select-option[data-combobox-selected]) {
+  background: var(--glu-accent);
+  color: var(--glu-on-accent);
+}
+
+/* ADR 40: the nine sounds. A grid rather than a segmented control — nine rungs
+   do not fit a half-tablet row, and each one has to be a thumb-sized target in
+   its own right. Two columns below `sm`, three above. */
+.soundGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (min-width: 48em) {
+  .soundGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Unlayered CSS outranks Mantine (ADR 37), so every state this button can be
+   in is restated here rather than half-inherited from `UnstyledButton`. */
+.soundButton {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: var(--glu-border);
+  border-radius: var(--glu-control-radius);
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  letter-spacing: var(--glu-label-tracking);
+  text-transform: var(--glu-label-transform);
+  cursor: pointer;
+}
+
+/* The selection is carried by fill and border, both contrast-guaranteed by
+   construction: `--glu-on-accent` is the ink the accent fill exists for. */
+.soundButton[data-selected="true"] {
+  background: var(--glu-accent);
+  border-color: var(--glu-accent);
+  color: var(--glu-on-accent);
+}
+
+/* Playing is a *third* state, and it always rides on the selected fill (a
+   preview selects first), so the ring is drawn *inside* in the one colour that
+   is contrast-guaranteed against the accent. It says "tap me again to stop". */
+.soundButton[data-playing="true"] {
+  box-shadow: inset 0 0 0 2px var(--glu-on-accent);
+}
+
+.soundButton:focus-visible {
+  outline: 2px solid var(--glu-accent);
+  outline-offset: 2px;
 }
 
 /* ADR 27: the two sample comments. Styled entirely through chrome tokens —

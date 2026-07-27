@@ -1,6 +1,7 @@
 "use client";
 
 import { Popover, Skeleton, UnstyledButton } from "@mantine/core";
+import { useTranslations } from "next-intl";
 import { useTodoistAuth } from "@/store/todoistAuth";
 import { TodoistLogin } from "./TodoistLogin";
 import { TodoistMark } from "./TodoistMark";
@@ -17,6 +18,7 @@ export function TodoistButton() {
   const status = useTodoistAuth((s) => s.status);
   const name = useTodoistAuth((s) => s.name);
   const logout = useTodoistAuth((s) => s.logout);
+  const t = useTranslations("todoist");
 
   if (status === "unknown") {
     return (
@@ -34,7 +36,7 @@ export function TodoistButton() {
     );
   }
 
-  const label = name ?? "Todoist";
+  const label = name ?? t("accountFallback");
   return (
     <div className={classes.slot}>
       {/* A Popover rather than a Mantine `Menu`: the Menu's focus-trap anchor
@@ -49,7 +51,11 @@ export function TodoistButton() {
         shadow="md"
       >
         <Popover.Target>
-          <button type="button" className={classes.chip} aria-label={`Todoist account: ${label}`}>
+          <button
+            type="button"
+            className={classes.chip}
+            aria-label={t("accountAriaLabel", { label })}
+          >
             {/* The mark rather than an initial: a 12px letter on brand red is
                 below the contrast gate, and the logo says "Todoist" better. */}
             <span className={classes.avatar} aria-hidden="true">
@@ -60,7 +66,7 @@ export function TodoistButton() {
         </Popover.Target>
         <Popover.Dropdown className={classes.accountMenu}>
           <UnstyledButton className={classes.menuItem} onClick={() => void logout()}>
-            Log out
+            {t("logOut")}
           </UnstyledButton>
         </Popover.Dropdown>
       </Popover>

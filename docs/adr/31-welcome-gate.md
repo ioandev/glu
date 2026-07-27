@@ -2,6 +2,22 @@
 
 - Status: Implemented (deviations noted)
 - Date: 2026-07-25
+- Amended (2026-07-26): **the install fact gets its own visible callout**,
+  promoted out of the trailing footnote. Owner report: installability was
+  going unnoticed, and a one-clause mention below the feature grid and the
+  footer nav was too easy to scroll past. `WelcomeSections.tsx` gains
+  `welcomeInstallNote` (the callout copy — points at the browser's own install
+  control: the address-bar icon, "Add to Home Screen", the Android install
+  menu item; it does not claim to trigger installation itself, and does not
+  wire `beforeinstallprompt`), and `welcomeFootnote` shrinks to the one
+  sentence that is genuinely a footnote ("GLU is free and open source").
+  `WelcomeContent.tsx` renders the callout right after the hero/CTA, in a new
+  `.installCallout` card (`welcome.module.css`, `--glu-*` tokens only, same as
+  every other rule on this page — accent-bordered rather than filled, so it
+  reads as a highlight and not a warning). House rule honoured: no ADR
+  numbers, and no fact this callout states that ADR 04/29's manual does not
+  already state. Same-day ADR 29 amendment reorders the manual's own install
+  section for the same reason.
 
 ## Context
 

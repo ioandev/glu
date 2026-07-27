@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Transition, UnstyledButton } from "@mantine/core";
+import { useTranslations } from "next-intl";
 import classes from "./todoist.module.css";
 
 export interface UndoMessage {
@@ -28,6 +29,7 @@ export interface UndoMessage {
  */
 export function UndoBar({ message }: { message: UndoMessage | null }) {
   const [expiredKey, setExpiredKey] = useState<string | null>(null);
+  const t = useTranslations("todoist");
 
   useEffect(() => {
     if (!message) return;
@@ -55,7 +57,7 @@ export function UndoBar({ message }: { message: UndoMessage | null }) {
           {message?.badge ? <span className={classes.undoBadge}>{message.badge}</span> : null}
           <span className={classes.undoText}>{message?.error ?? message?.text}</span>
           <UnstyledButton className={classes.undoButton} onClick={() => message?.onUndo()}>
-            Undo
+            {t("undo")}
           </UnstyledButton>
         </div>
       )}

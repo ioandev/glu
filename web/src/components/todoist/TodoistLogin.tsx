@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { apiUrl } from "@/lib/api";
 import { TodoistMark } from "./TodoistMark";
 import classes from "./todoist.module.css";
@@ -12,11 +13,13 @@ import classes from "./todoist.module.css";
  * OAuth is a redirect dance, not an XHR: a plain full-page navigation to a
  * *server* route, so `next/link` does not apply.
  */
-export function TodoistLogin({ label = "Log in with Todoist" }: { label?: string }) {
+export function TodoistLogin({ label }: { label?: string }) {
+  const t = useTranslations("todoist");
+
   return (
     <a className={classes.loginButton} href={apiUrl("/auth/todoist/login")}>
       <TodoistMark size={20} />
-      {label}
+      {label ?? t("logIn")}
     </a>
   );
 }

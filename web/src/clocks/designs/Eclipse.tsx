@@ -1,4 +1,4 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -24,6 +24,7 @@ export const eclipseTheme: ClockTheme = {
 };
 
 export function Eclipse({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const stateLabel = useStateLabel();
   const p = clockProgress(remainingMs, totalMs);
   // Fully clear at the start, fully occluded at the end.
   const shift = -100 + p.elapsedFraction * 100;
@@ -39,7 +40,7 @@ export function Eclipse({ remainingMs, totalMs, state, accent }: ClockProps) {
           <span className={classes.time} style={{ fontSize: "11cqmin", fontWeight: 500 }}>
             {p.time}
           </span>
-          <span className={classes.label}>{stateLabel(state, "Until break")}</span>
+          <span className={classes.label}>{stateLabel(state, "untilBreak")}</span>
         </div>
       </div>
     </ClockFrame>

@@ -3,7 +3,7 @@ import type { ClockTheme } from "@/theme/palette";
 import type { TimerStatus } from "@/store/types";
 
 /**
- * The one props contract all 18 clocks implement (ADR 07). Pure functions of
+ * The one props contract every clock implements (ADR 07). Pure functions of
  * their props: no `Date.now()`, no internal timers — the frame tick (ADR 02)
  * drives them from outside, which is what makes them storybookable at any
  * frozen instant and cheap to test.

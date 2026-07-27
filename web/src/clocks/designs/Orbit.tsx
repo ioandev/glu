@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -36,6 +37,8 @@ export function Orbit({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
   // The inner ring fills with the day's sessions, capped at eight.
   const dayFraction = Math.min(1, session / 8);
@@ -109,7 +112,7 @@ export function Orbit({
             letterSpacing="3"
             fill="var(--clk-muted)"
           >
-            {stateLabel(state).toUpperCase()}
+            {stateLabel(state).toLocaleUpperCase(locale)}
             {showSession ? (
               <tspan data-testid="clock-session"> {"\u00b7"} {session}</tspan>
             ) : null}

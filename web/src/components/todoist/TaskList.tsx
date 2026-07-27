@@ -1,10 +1,13 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState, type RefObject } from "react";
 import { Skeleton, Stack, Text, UnstyledButton } from "@mantine/core";
+import { useTranslations } from "next-intl";
 import { TaskCard } from "./TaskCard";
-import { groupBySection, type TodoistSource, type UiTask } from "./types";
+import { sectionRuns, type TodoistSource, type UiTask } from "./types";
 import type { TodoistListState } from "./useTodoistList";
+import { useGluStore } from "@/store/gluStore";
+import { resolveSectionItemLimit, SECTION_ITEM_LIMIT_ALL } from "@/store/types";
 import classes from "./todoist.module.css";
 
 export interface TaskListProps {
@@ -18,6 +21,10 @@ export interface TaskListProps {
   /** ADR 20: optimistically completed ids are filtered from render. */
   completingIds?: Set<string>;
   failedIds?: Set<string>;
+  /** ADR 43: the pull gesture reads `scrollTop` from here. It is `null` in the
+   *  four non-list states, which is correct — they do not scroll, so they are
+   *  always at the top and always pullable. */
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -34,11 +41,22 @@ export function TaskList({
   excludeId,
   completingIds,
   failedIds,
+  scrollRef,
 }: TaskListProps) {
+  // ADR 39. Both hooks sit above the five list states because hooks must:
+  // `phase === "loading"` returns before any run exists, and React counts the
+  // calls, not the renders that use them.
+  const sectionItemLimit = useGluStore((s) => s.sectionItemLimit);
+  const t = useTranslations("todoist");
+  const tError = useTranslations("errors");
+  // Per-visit and per-run: a ceiling lifted for one section on Tuesday is not a
+  // preference, so this is `useState` and never the blob.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+
   if (!source || list.gone) {
     return (
       <Text className={classes.hint} data-testid="task-hint">
-        Pick a filter, label or project with the tools icon above.
+        {t("pickSourceHint")}
       </Text>
     );
   }
@@ -56,12 +74,17 @@ export function TaskList({
   if (list.phase === "error") {
     return (
       <Stack gap="xs" className={classes.list}>
-        {/* Filters are user-authored code: show Todoist's own words. */}
+        {/* Never the upstream text (ADR 44): `errorMessage` is `apiFetch`'s
+            internal `GET /path failed`, which is English and is not copy. */}
         <Text className={classes.errorText} data-testid="task-error">
-          {list.errorMessage ?? "Could not reach Todoist."}
+          {tError("unreachable")}
         </Text>
-        <UnstyledButton className={classes.toolsButton} onClick={list.reload} aria-label="Retry">
-          Retry
+        <UnstyledButton
+          className={classes.toolsButton}
+          onClick={list.reload}
+          aria-label={t("retry")}
+        >
+          {t("retry")}
         </UnstyledButton>
       </Stack>
     );
@@ -73,40 +96,66 @@ export function TaskList({
   if (tasks.length === 0) {
     return (
       <Text className={classes.hint} data-testid="task-empty">
-        Nothing here — {source.name} is clear.
+        {t("sourceEmpty", { name: source.name })}
       </Text>
     );
   }
 
-  const groups =
-    source.type === "project"
-      ? groupBySection(tasks, list.sections)
-      : [{ sectionId: null, name: null, tasks }];
+  // Projects re-bucket into Todoist's own section_order (a single project has
+  // one natural order); filters/labels can span several projects' sections
+  // with no single ordering to re-bucket into, so they keep task order and
+  // get running headers instead (ADR 12 amendment 2026-07-26). `sectionRuns`
+  // holds that split, so what renders is one loop over runs — and ADR 39's
+  // ceiling is written once rather than once per view.
+  const runs = sectionRuns(source, tasks, list.sections, list.projects);
+  const limit = resolveSectionItemLimit(sectionItemLimit);
+
+  const body = runs.map((run) => {
+    // The cap lands *after* the focused/completing exclusions above, so
+    // completing a visible task promotes a hidden one (ADR 39). Note the
+    // explicit compare: `SECTION_ITEM_LIMIT_ALL` is 0, and a falsy test would
+    // turn "no ceiling" into "no tasks".
+    const capped =
+      limit === SECTION_ITEM_LIMIT_ALL || expanded.has(run.key)
+        ? run.tasks
+        : run.tasks.slice(0, limit);
+    const hidden = run.tasks.length - capped.length;
+    return (
+      <Fragment key={run.key}>
+        {run.header ? (
+          <Text className={classes.sectionHeader} component="div">
+            {run.header}
+          </Text>
+        ) : null}
+        {capped.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onOpen={onOpen}
+            onFocus={onFocus}
+            onComplete={onComplete}
+            failed={failedIds?.has(task.id)}
+          />
+        ))}
+        {hidden > 0 ? (
+          <UnstyledButton
+            className={classes.sectionMore}
+            data-testid={`section-more-${run.key}`}
+            onClick={() => setExpanded((current) => new Set(current).add(run.key))}
+          >
+            {t("moreHidden", { count: hidden })}
+          </UnstyledButton>
+        ) : null}
+      </Fragment>
+    );
+  });
 
   return (
-    <div className={classes.list} data-testid="task-list">
-      {groups.map((group) => (
-        <Fragment key={group.sectionId ?? "__none"}>
-          {group.name ? (
-            <Text className={classes.sectionHeader} component="div">
-              {group.name}
-            </Text>
-          ) : null}
-          {group.tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onOpen={onOpen}
-              onFocus={onFocus}
-              onComplete={onComplete}
-              failed={failedIds?.has(task.id)}
-            />
-          ))}
-        </Fragment>
-      ))}
+    <div ref={scrollRef} className={classes.list} data-testid="task-list">
+      {body}
       {list.truncated ? (
         <Text className={classes.truncation} data-testid="task-truncation">
-          Showing first {list.cap}
+          {t("showingFirst", { count: list.cap })}
         </Text>
       ) : null}
     </div>

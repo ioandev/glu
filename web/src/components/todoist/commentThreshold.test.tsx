@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { intlWrapper } from "@/test/intl";
 import { MINUTE } from "@/lib/time";
 import { initialPersistedState, resetGluStore, useGluStore } from "@/store/gluStore";
 import { blobKey } from "@/store/storage";
@@ -71,7 +72,7 @@ describe("the minimum run before a comment is logged (ADR 28)", () => {
 
   it("queues nothing for a run under the chosen minimum", () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => store().setCommentThresholdMinutes(5));
     runFor(t0, 4);
@@ -81,19 +82,19 @@ describe("the minimum run before a comment is logged (ADR 28)", () => {
 
   it("queues the same comment it always did once the run clears it", async () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => store().setCommentThresholdMinutes(5));
     runFor(t0, 6);
     act(() => vi.setSystemTime(t0 + 6 * MINUTE + COMMENT_GRACE_MS + 1));
 
     await waitFor(() => expect(postedBodies()).toHaveLength(1));
-    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 6 });
+    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 6, locale: "en" });
   });
 
   it("treats the minimum as at-least at the chosen minute too", () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => store().setCommentThresholdMinutes(2));
     runFor(t0, 1.999);
@@ -118,7 +119,7 @@ describe("the minimum run before a comment is logged (ADR 28)", () => {
    */
   it("posts for a 1-minute timer run to 0:00 at the default threshold", () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => {
       store().setFocusedTask({ id: "t1", title: "Write the ADR", priority: 1 });
@@ -141,7 +142,7 @@ describe("the minimum run before a comment is logged (ADR 28)", () => {
 
   it("is read at run end: raising it afterwards does not un-queue a comment", async () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     runFor(t0, 3);
     expect(store().outbox).toHaveLength(1);
@@ -154,12 +155,12 @@ describe("the minimum run before a comment is logged (ADR 28)", () => {
     });
 
     await waitFor(() => expect(postedBodies()).toHaveLength(1));
-    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 3 });
+    expect(postedBodies()[0]).toEqual({ taskId: "t1", minutes: 3, locale: "en" });
   });
 
   it("gates the comment only — a completed pomodoro still counts (ADR 05)", () => {
     const t0 = freezeClock();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     act(() => {
       store().setCommentThresholdMinutes(10);
@@ -220,7 +221,7 @@ describe("a run that ended while the app was closed (ADR 14)", () => {
     // ADR 05's half never broke — it is written inside the store action.
     expect(store().day.sessions).toHaveLength(1);
 
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     expect(store().outbox).toHaveLength(1);
     expect(store().outbox[0]).toMatchObject({ runId: "run-away-1", taskId: "t1", minutes: 5 });
@@ -232,10 +233,10 @@ describe("a run that ended while the app was closed (ADR 14)", () => {
     window.localStorage.setItem(blobKey(2), JSON.stringify(expiredBlob(t0)));
     await useGluStore.persist.rehydrate();
 
-    const first = renderHook(() => useTimeComments());
+    const first = renderHook(() => useTimeComments(), { wrapper: intlWrapper });
     expect(store().outbox).toHaveLength(1);
     first.unmount();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     // The outbox is `runId`-idempotent anyway; this asserts the buffer itself
     // is drained, not that the outbox papered over a second delivery.
@@ -263,7 +264,7 @@ describe("a run that ended while the app was closed (ADR 14)", () => {
       }),
     );
     await useGluStore.persist.rehydrate();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     // Its comment was queued when it ended; re-emitting on every load would
     // post a second one for the same run every time the tab reopened.
@@ -308,7 +309,7 @@ describe("the setting rides the additive-blob pattern (ADR 28)", () => {
 
     resetGluStore();
     await useGluStore.persist.rehydrate();
-    renderHook(() => useTimeComments());
+    renderHook(() => useTimeComments(), { wrapper: intlWrapper });
 
     const t0 = Date.now();
     runFor(t0, 0.5);

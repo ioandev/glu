@@ -42,6 +42,8 @@ const pathFor = (route: SiteRoute) => (route === "/" ? "." : route.slice(1));
 
 const meta = (html: string, key: string) => {
   const match = html.match(
+    // Built from this suite's own key constants, never from page content.
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
     new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`, "i"),
   );
   return match?.[1] ?? null;

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveCommentLocale } from "./commentLocales";
 import request from "supertest";
 import { sealData } from "iron-session";
 import { createApp } from "./app";
@@ -537,5 +538,79 @@ describe("the DELETE guard still recognises a decorated comment (ADR 27)", () =>
     expect(response.status).toBe(403);
     // The call count is the assertion that matters: no delete was issued.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * ADR 44. These literals are **pinned on purpose**, and their twins live in
+ * `web/src/lib/timeComment.test.ts`. The two packages compose this sentence
+ * from separate copies of the same vocabulary (ADR 22 forbids sharing a module
+ * between them), so the only thing standing between the Settings preview and
+ * what actually lands in Todoist is that both suites assert the same strings.
+ * If you change one, the other fails — which is the whole point.
+ */
+describe("the comment speaks the reader's language (ADR 44)", () => {
+  it("composes the plain sentence in every locale", () => {
+    expect(composeTimeComment(25, [], "en")).toBe("[25m] You spent 25 minutes on this");
+    expect(composeTimeComment(25, [], "es")).toBe("[25m] Dedicaste 25 minutos a esto");
+    expect(composeTimeComment(25, [], "fr")).toBe("[25m] Vous avez passé 25 minutes là-dessus");
+    expect(composeTimeComment(25, [], "pt")).toBe("[25m] Dedicaste 25 minutos a isto");
+    expect(composeTimeComment(25, [], "de")).toBe("[25m] Du hast 25 Minuten daran gearbeitet");
+    expect(composeTimeComment(25, [], "zh-Hans")).toBe("[25m] 你在这件事上花了 25 分钟");
+  });
+
+  it("gets the singular right where the language has one", () => {
+    expect(composeTimeComment(1, [], "en")).toBe("[1m] You spent 1 minute on this");
+    expect(composeTimeComment(1, [], "es")).toBe("[1m] Dedicaste 1 minuto a esto");
+    expect(composeTimeComment(1, [], "fr")).toBe("[1m] Vous avez passé 1 minute là-dessus");
+    expect(composeTimeComment(1, [], "de")).toBe("[1m] Du hast 1 Minute daran gearbeitet");
+    // Chinese has one plural category — the unit does not move.
+    expect(composeTimeComment(1, [], "zh-Hans")).toBe("[1m] 你在这件事上花了 1 分钟");
+  });
+
+  it("builds the environment clause with each language's own list grammar", () => {
+    const keys = ["music", "podcast", "headphones"];
+    expect(composeTimeComment(5, keys, "en")).toBe(
+      "[5m] You spent 5 minutes on this — with music and a podcast, on headphones",
+    );
+    expect(composeTimeComment(5, keys, "es")).toBe(
+      "[5m] Dedicaste 5 minutos a esto — con música y un pódcast, con auriculares",
+    );
+    expect(composeTimeComment(5, keys, "fr")).toBe(
+      "[5m] Vous avez passé 5 minutes là-dessus — avec de la musique et un podcast, au casque",
+    );
+    expect(composeTimeComment(5, keys, "de")).toBe(
+      "[5m] Du hast 5 Minuten daran gearbeitet — mit Musik und einem Podcast, mit Kopfhörern",
+    );
+    expect(composeTimeComment(5, keys, "zh-Hans")).toBe(
+      "[5m] 你在这件事上花了 5 分钟 — 伴随音乐和播客，戴着耳机",
+    );
+  });
+
+  it("keeps silence exclusive in every language", () => {
+    expect(composeTimeComment(5, ["silence"], "de")).toBe(
+      "[5m] Du hast 5 Minuten daran gearbeitet — in Stille",
+    );
+    // ADR 02's exclusivity, re-applied server-side: a sound wins over silence.
+    expect(composeTimeComment(5, ["silence", "tv"], "de")).toBe(
+      composeTimeComment(5, ["tv"], "de"),
+    );
+  });
+
+  it("keeps the [Nm] anchor parseable whatever the language", () => {
+    // The reason the prefix is not localised: totals and the DELETE guard read
+    // it, and they have to keep recognising comments written before a language
+    // was ever chosen.
+    for (const locale of ["en", "es", "fr", "pt", "de", "zh-Hans"] as const) {
+      expect(parseTimeComment(composeTimeComment(42, ["music"], locale))).toBe(42);
+    }
+  });
+
+  it("falls back to English rather than rejecting an unknown locale", () => {
+    // A vocabulary mismatch must never strand a queued comment in the outbox's
+    // permanent-failure path.
+    expect(resolveCommentLocale("klingon")).toBe("en");
+    expect(resolveCommentLocale(undefined)).toBe("en");
+    expect(resolveCommentLocale("de")).toBe("de");
   });
 });

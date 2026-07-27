@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { ApiError, apiFetch } from "@/lib/api";
 import { activeEnvironmentKeys } from "@/lib/timeComment";
 import { onRunEnd, useGluStore } from "@/store/gluStore";
@@ -133,6 +134,11 @@ export function commentUndoMessage(
  * pauses: `total − remaining` lies the moment ±1/±5 exist.
  */
 export function useTimeComments() {
+  const t = useTranslations("todoist");
+  // Read at *send* time, not at run-end time: a comment can sit in the outbox
+  // across a language change, and the sentence should be the one the user reads
+  // the app in now (ADR 44).
+  const locale = useLocale();
   const focusedTask = useGluStore((s) => s.focusedTask);
   const outbox = useGluStore((s) => s.outbox);
   const enqueue = useGluStore((s) => s.enqueueComment);
@@ -215,6 +221,10 @@ export function useTimeComments() {
               taskId: entry.taskId,
               minutes: entry.minutes,
               ...(entry.environment?.length ? { environment: entry.environment } : {}),
+              // ADR 44: still enumerated values only — the browser sends a
+              // *locale code*, never the sentence. The server owns the words,
+              // exactly as ADR 14 left it.
+              locale,
             }),
           },
         );
@@ -250,7 +260,7 @@ export function useTimeComments() {
         sending.current.delete(entry.runId);
       }
     }
-  }, [authStatus, drop, markAttempt]);
+  }, [authStatus, drop, markAttempt, locale]);
 
   // Drain on load, on focus, and whenever the queue or a grace deadline moves.
   useEffect(() => {
@@ -304,7 +314,7 @@ export function useTimeComments() {
       } catch {
         // Rare: deleted upstream meanwhile, or the shape check refused it. Say
         // so on the bar; never an error screen (ADR 20's posture).
-        setPosted({ ...posted, error: "Could not undo" });
+        setPosted({ ...posted, error: t("couldNotUndo") });
         return;
       } finally {
         deleting.current = false;
@@ -312,7 +322,7 @@ export function useTimeComments() {
       setPosted(null);
       setTotalNonce((n) => n + 1);
     },
-    [drop, posted],
+    [drop, posted, t],
   );
 
   /** ADR 20's cross-type displacement calls this: commit, never cancel. */

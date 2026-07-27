@@ -97,6 +97,17 @@ export const PendingUpload: Story = {
   },
 };
 
+/** ADR 35: a failed close puts the task back in the slot with this mark. */
+export const CompleteFailed: Story = {
+  args: { failed: true, onComplete: () => {} },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId("focused-error")).toHaveTextContent("Could not complete");
+    // The circle is still the retry path.
+    await expect(canvas.getByRole("button", { name: /Complete “/ })).toBeVisible();
+  },
+};
+
 export const GoneUpstream: Story = {
   args: { gone: true },
   play: async ({ canvasElement }) => {

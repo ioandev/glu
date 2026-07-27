@@ -55,6 +55,18 @@ it defines scope, implementation outline, and acceptance criteria. Rules:
 | [30](docs/adr/30-social-preview-metadata.md) | Social preview and page metadata — Open Graph cards for every route | Implemented (deviations noted) |
 | [31](docs/adr/31-welcome-gate.md) | Welcome gate — a front door for the first visit | Implemented (deviations noted) |
 | [32](docs/adr/32-custom-durations.md) | Custom durations — ± off the ladder, and the row that shows it | Implemented |
+| [33](docs/adr/33-notification-service-worker.md) | Notification service worker — ADR 18's Android escalation, taken | Implemented (deviations noted) |
+| [34](docs/adr/34-filter-task-ordering.md) | Filter and label task order — reproducing Todoist's default sort | Implemented (deviations noted) |
+| [35](docs/adr/35-focused-completion-vacates-slot.md) | Focused completion vacates the slot — the fourth bug report | Implemented (deviations noted) |
+| [37](docs/adr/37-transport-toggle.md) | One transport toggle — Start, Pause and Resume are the same button | Implemented |
+| [38](docs/adr/38-vulnerability-scanning.md) | Vulnerability scanning — dependencies, code, secrets, images, workflows | Implemented (deviations noted) |
+| [42](docs/adr/42-second-clock-set.md) | The second clock set — 22 more designs, and the count stops being written down | Implemented |
+| [45](docs/adr/45-third-clock-set.md) | The third clock set — 46 stopwatch designs, pointed back at a countdown | Implemented |
+| [39](docs/adr/39-section-item-limit.md) | Limit the items in a section — a ceiling per section, and the row that lifts it | Implemented |
+| [40](docs/adr/40-alert-sound-library.md) | A sound library for the end of a run — nine sounds and how long they play | Accepted |
+| [41](docs/adr/41-notification-permission-asks.md) | Three asks, then Settings — the notification permission stops nagging | Implemented (deviations noted) |
+| [43](docs/adr/43-pull-to-refresh.md) | Pull to refresh the task list — the gesture the tablet was missing | Implemented (deviations noted) |
+| [44](docs/adr/44-internationalization.md) | Six languages — internationalization without locale URLs | Implemented (deviations noted) |
 
 > **Paths in ADRs 01–21 predate ADR 22's split** and were left as written —
 > they are historical records. Read `src/…` as `web/src/…` and `server/…` as
@@ -77,23 +89,62 @@ before 12–14 so they build on it)** → 12 → 13 → 14 → 20 → 21 → 22 
 **29 (the manual — one docs page, opened as a modal from the drawer)** →
 **30 (social preview — an Open Graph card and a full head on every route)** →
 **31 (the welcome gate — the front door the metadata was pointing at)** →
-**32 (custom durations — the first bug report the board answered with an ADR)**.
+**32 (custom durations — the first bug report the board answered with an ADR)** →
+**33 (notification SW — ADR 18's named escalation, taken on the second bug
+report)** →
+**34 (filter and label task order — the third bug report, and the third
+upstream fact ADR 12 recorded wrongly)** →
+**35 (focused completion vacates the slot — the fourth bug report, reversing
+ADR 20's owner-delegated lingering decision)** →
+**37 (one transport toggle — the fifth bug report; ADR 02's three-button row
+becomes two, and a disabled button nobody could see becomes no button at
+all)** →
+**38 (vulnerability scanning — repo-level like 23; the July audit becomes
+standing machinery)** →
+**39 (limit the items in a section — the sixth brief; a per-section ceiling in
+Settings, and `TaskList`'s two render branches collapse into one loop over
+`sectionRuns`)** →
+**40 (the sound library — ADR 18's one chime becomes nine, with a bounded
+length; the first settings row you audition rather than read)** →
+**42 (the second clock set — ADR 07's roster doubles, and `CLOCK_COUNT`
+replaces the ten copies of "18")** →
+**43 (pull to refresh — ADR 12's manual refresh gets a gesture; the second use
+of ADR 08/25's Pointer-Events idiom, and the task list's fourth freshness
+trigger)** →
+**41 (three asks, then Settings — the seventh bug report; ADR 18's "asked
+once" was only true of the user who answers, and the Alerts section gains the
+door)** →
+**45 (the third clock set — the stopwatch sheet, with the digits turned back
+around: the artwork fills with elapsed, the readout is always what is left)** →
+**44 (six languages — the app stops being English-only; a cookie, not a URL
+segment, and prose kept out of the message catalog)**.
 
 Future ADRs: **none unnumbered — the board is fully specified.** New
 features arrive as fresh briefs; the named reopening conditions are: task
-authoring (adopts TanStack Query per ADR 20), offline mode (re-adds a
-service worker per ADR 04), notification SW (ADR 04 amendment per ADR 18),
-gallery drag physics (finger-tracking, per ADR 25).
+authoring (adopts TanStack Query per ADR 20), offline mode (adds a fetch
+handler per ADR 04 — the notification-only SW ADR 33 ships must never grow
+one outside that ADR), gallery drag physics (finger-tracking, per ADR 25),
+a clock **picker** (ADR 08's "past ~25 designs" condition, made live by
+ADR 42 and loud at ADR 45's roster of eighty-six).
+**Taken** (2026-07-26): notification SW → ADR 33.
 
 Penciled settings sections (each = one section row + an ADR 19 amendment
 when briefed): chrome-direction selection (ADR 15), archive export/import
-(ADR 05), alert volume/mute/chime (ADR 18), final-countdown takeover
+(ADR 05), the **sound's** volume/mute (ADR 18 — chime *selection* is discharged
+by ADR 40, and the *notification* mute by ADR 41), final-countdown takeover
 opt-out/threshold (ADR 21). **Landed**: the Screen section (2026-07-25) —
 two stay-awake toggles, amended into ADRs 17 and 19; the Time comments
 section (2026-07-25, ADR 27) — "Say how you worked" plus two live previews
 of the comment, amended into ADRs 14 and 19, which gained a second row
 (2026-07-25, ADR 28) — the "Minimum time to log" ladder, default 1 min,
-which is where ADR 14's hard-coded 60 s threshold now lives.
+which is where ADR 14's hard-coded 60 s threshold now lives; the Tasks
+section (2026-07-26, ADR 39) — the "Limit the items in a section to" ladder,
+10 / 20 / 50 / 100 / All, default All, amended into ADRs 12 and 19; the Alerts
+section (2026-07-26, ADR 40) — a nine-button sound grid over a "How long it
+plays" ladder (Once / 3 / 5 / 10 / 20 s), amended into ADRs 18 and 19, which
+gained a third row (2026-07-26, ADR 41) — "Notify me when a session ends", a
+switch that **leads** the section: the permission's only door once the automatic
+asks run out, and GLU's own mute in the other direction.
 
 **Cancelled** (2026-07-24, product decision): backend & sync, history & stats
 UI, task-linked session history. The backend is permanently a stateless
@@ -129,6 +180,19 @@ following the structure used by ADR 01.
   its own `Dockerfile` + `.dockerignore` and is its own build context** —
   `glu-web` from `web/`, `glu-api` from `backend/`; there is no root
   Dockerfile, and CI selects a tier by `context:`, never by `file:`.
+- **An unsorted Todoist view is not an unordered one** (ADR 34) —
+  `/tasks/filter` returns rows in no defined order, and Todoist's own apps sort
+  client-side before painting, so **the proxy sorts filter and label results**:
+  priority descending (API 4 is P1) → date and time, undated last → deadline →
+  project order (Inbox first, parent before child, via a best-effort
+  `/projects` read) → `child_order` → id. `compareTasks` in
+  `backend/todoistRoutes.ts` is the one copy. **Projects are exempt** —
+  `section_order` then `child_order` genuinely is Todoist's project order, and
+  the web applies it (ADR 12). Todoist's date-first rule for date-query filters
+  is deliberately *not* implemented: detecting one means parsing a grammar we
+  do not own. ADR 12's "API order for filters/labels" line is superseded, as is
+  its claim that the multi-view union's view order "is the order Todoist itself
+  shows".
 - **The backend is permanently a stateless Todoist proxy** (ADR 11: Express 5
   in `backend/`, mounted at `/glu/api`; tokens in a sealed httpOnly cookie —
   the browser holds the encrypted blob, only the server can open it, the
@@ -136,9 +200,24 @@ following the structure used by ADR 01.
   2026-07-24**; session data is localStorage-only by design. Do not add
   server features or storage without a new ADR. All Todoist API traffic goes
   through the server proxy.
-- **PWA = installable only, NOT offline** (product decision 2026-07-23) — no
-  service worker anywhere; ADR 04 is manifest + icons + install metadata. Do
-  not add offline/caching machinery without a new ADR.
+- **PWA = installable only, NOT offline** (product decision 2026-07-23; law
+  restated 2026-07-26 by ADR 33) — **no fetch handler anywhere**. The only
+  service worker is ADR 33's notification-only `web/public/sw.js`
+  (skipWaiting + notificationclick, nothing else; e2e asserts its source is
+  fetch-handler-free). ADR 04 is manifest + icons + install metadata. Do not
+  add offline/caching machinery, or anything to `sw.js`, without a new ADR.
+- **A dismissed permission prompt is not a denied one** (ADR 41) — dismissing
+  leaves `Notification.permission` at `default`, so a `!== 'default'` guard is
+  not "ask once", it is "ask forever". The automatic ask is capped at
+  `ALERT_PROMPT_LIMIT` (3) by the persisted `alertPromptsUsed`, spent **at the
+  moment of asking** (a dismissed prompt's promise resolves late, and resolves
+  at all once the browser has stopped rendering the dialog). The counter never
+  resets — not on "New day", not on logout — and a corrupt value reads as *zero
+  spent*, never as spent. Settings → Alerts' third row is the door that stays
+  open, it is never charged to the budget, and it must stay visible before the
+  cap as well as after. Any future browser-capability surface reads its state
+  with `useSyncExternalStore` (`useNotificationPermission`), not an effect that
+  copies a global into state.
 - **Every security header is app-owned except HSTS** (ADR 16 amendments
   2026-07-25) — the page CSP is nonce-based: `web/src/proxy.ts` mints a
   per-request nonce, sends the `Content-Security-Policy` header, and hands the
@@ -174,6 +253,11 @@ following the structure used by ADR 01.
   partition IS the versioned `glu:vN` blob via `persist` +
   `version`/`migrate`/`partialize`; the per-frame tick display value and auth
   status never persist; purely-local UI state stays `useState`.
+  **CSS modules are unlayered and therefore outrank Mantine** (ADR 37) — Mantine
+  ships inside `@layer mantine`, so any `.module.css` rule beats its `:disabled`,
+  `[data-active]` and hover treatments regardless of specificity. A module class
+  that paints a Mantine control paints it in *every* state; restate the states
+  you care about rather than assuming Mantine's still apply.
 - **± means two different things, and `selectedDuration` has two writers**
   (ADR 32) — `running`/`paused`, ± trims *that run* (ADR 02: `remaining` moves,
   `total` follows, zero completes it) and the selection is untouched, so Stop
@@ -206,10 +290,37 @@ following the structure used by ADR 01.
   purpose — ADR 22 forbids sharing), not env vars; ADR 24's table is the
   contract. `/healthz` on both tiers is never metered — a 429 there fails the
   container healthcheck and takes the site down.
+- **Security scanning is standing machinery, and it never gates the deploy**
+  (ADR 38) — Dependabot + `codeql.yml` + `security.yml` (npm audit, Semgrep,
+  Gitleaks, Trivy, Hadolint, actionlint, zizmor) run on PRs and a weekly cron,
+  deliberately outside ADR 16's `tests.yml` gate: red means "look at this",
+  never "you cannot ship". ESLint security plugins ride in `just lint`. Every
+  mute is narrow and carries an inline reason (`.gitleaks.toml`'s one
+  allowlist entry, `security/detect-object-injection` off, the tag-pin
+  relaxations in `.github/zizmor.yml` and the Semgrep step) — an uncommented
+  mute is a review defect, and so is "fixing" a scanner by widening one.
+  `docs/security-scanning.md` is the crib sheet; manual DAST (ZAP, header
+  scanners) lives there and runs after deploy-shaped changes.
 - **`web/src/proxy.ts`, not `middleware.ts`** (ADR 24) — Next 16 renamed the
   convention, and `proxy.ts` runs on the **Node runtime**, which is what makes
   the limiter's `Map` an ordinary per-process singleton. It still owns the CSP
   nonce (ADR 16 amendment); don't move either concern back out.
+- **How many clock designs there are is derived, never written down** (ADR 42)
+  — `CLOCK_COUNT` in `web/src/clocks/registry.ts` is `CLOCKS.length`, and it is
+  the only statement of the roster's size; the docs page renders it, the stories
+  and the tests read it. Adding a design is a module under
+  `web/src/clocks/designs/` plus a registry entry plus a Storybook export, and
+  **nothing else changes** — the registry test asserts every design module is
+  registered exactly once instead of asserting a count, so a design that is
+  written but never wired up fails. Never reintroduce a literal count, in prose,
+  in a comment or in a test.
+- **The readout counts down; the artwork may count up** (ADR 45) — the third
+  design sheet is drawn as a stopwatch, and its accumulation metaphors (coins
+  banked, tally marks scored, a city built, a card stamped) fill with
+  `elapsedFraction` on purpose. What is never elapsed is **the time itself**:
+  every design shows `p.time`, and no label may describe the digits as going up.
+  `clockProgress` exports both fractions precisely so the choice is made per
+  design and never by hand-inverting a value.
 - **Icon source of truth** — `web/img/favicon.svg` (`web/img/favicon.png` is a
   508×523 non-square export). App and PWA icons are generated/copied from the SVG,
   never scaled from the PNG; regenerate via `just web icons`
@@ -232,16 +343,48 @@ following the structure used by ADR 01.
   `poster`); any styling that doesn't change when the chrome switches is a
   review defect. Clock components (ADR 07) are canonical — never rebuild the
   lookalikes from design mockups. Theming is chrome × clock palette × scheme.
-- **The user manual is a contract too** (ADR 29) —
-  `web/src/components/docs/DocsSections.tsx` is the one copy of what GLU does,
-  rendered by both `/glu/docs` and the drawer's Docs modal. Change a default, a
+- **The user manual is a contract too** (ADR 29, amended by ADR 44) —
+  `web/src/components/docs/content/en.tsx` is the one copy of what GLU does,
+  rendered by both `/glu/docs` and the drawer's Docs modal — **and it now has
+  five siblings.** An English edit landed without `es`, `fr`, `de`, `pt` and
+  `zh-Hans` in the same session ships five lies rather than one. Change a default, a
   hotkey, an undo window or a setting and that file changes in the same
-  session, `DOCS_UPDATED` included: a stale manual ships a lie to the user, not
-  just a stale document. It is a **user manual, not an architecture tour** — no
+  session, each module's `updated` date included: a stale manual ships a lie to
+  the user, not just a stale document. It is a **user manual, not an architecture tour** — no
   ADR numbers in the copy, internals only where they change what someone should
   expect. Its prose treatment is ADR 26's `legal.module.css`, shared by all
   three documents — "just tweaking" it restyles Privacy and Terms as well. The
   welcome (ADR 31) is **not** one of the three: it owns `welcome.module.css`.
+- **Interface copy lives in `web/src/locales/`, and English is the only one you
+  author** (ADR 44) — GLU ships in six languages (`en`, `es`, `zh-Hans`, `fr`,
+  `pt`, `de`). A new user-facing string is a key in `locales/en.ts` plus its
+  five translations; each translation module ends in `satisfies Messages`, so a
+  key you add and do not translate is a **build error**, not a string that
+  quietly renders in English. Never glue copy together with `+` or a template
+  literal — "1 minute / 2 minutes" is a two-case rule almost nothing else on the
+  roster shares. Use ICU (`{count, plural, …}`) and `Intl.ListFormat`.
+  **Prose is deliberately not in the catalog**: the manual, the welcome, Privacy
+  and Terms stay plain JSX so `/glu/docs` keeps serving its text as
+  server-rendered HTML — a `useTranslations` call in any of those files would
+  undo the property `DocsSections.tsx:18` exists to protect. The language comes
+  from the **`glu-locale` cookie**, resolved server-side before first paint; the
+  store's `locale` field is a mirror for the Settings row and can never drive
+  rendering (`skipHydration`). There is **no locale in the URL** and
+  `proxy.ts` is not involved — keep it that way, since it is the one file that
+  must see every request. `e2e/fixtures.ts` pins the whole suite to English;
+  `e2e/i18n.spec.ts` is the only spec that says otherwise.
+  The Todoist time comment is localised too, and its vocabulary is
+  **duplicated** into `backend/commentLocales.ts` on purpose (ADR 22 forbids
+  sharing): the browser sends a locale *code*, never the sentence, and the two
+  copies are pinned by identical literals in both packages' tests.
+  **Clock designs pass a message *key* to `useStateLabel`, never a word**
+  (`stateLabel(state, "orbit")`) — that is what keeps a new design from needing
+  its own `useTranslations`. The 86 `registry.ts` design names are the one
+  user-facing-ish copy still English, and only because nothing renders them; a
+  clock picker would change that. `Words` spells its numbers via
+  `clocks/designs/wordsNumbers.ts`, which is per-locale *rules*, not a table. The locale cookie is scoped to
+  path `/`, never to `basePath` — a prefix-scoped cookie stops being sent the
+  day the prefix moves, and does it silently.
 - **`/glu` is gated on a persisted boolean** (ADR 31) — `hasEnteredApp` in the
   `glu:vN` blob decides whether the route renders `AppShell` or the welcome, and
   it is resolved in **both `merge` and `migrate`** in `web/src/store/gluStore.ts`.

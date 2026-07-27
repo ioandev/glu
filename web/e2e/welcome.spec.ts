@@ -94,7 +94,10 @@ test.describe("welcome gate (ADR 31)", () => {
     const html = await (await request.get("welcome")).text();
 
     expect(html).toContain(HEADLINE);
-    expect(html).toContain("eighteen clock designs");
+    // The roster size is interpolated from `CLOCK_COUNT`, never written out
+    // (ADR 42/44) — this line used to assert "eighteen", which stopped being
+    // true two clock sets ago and said so in the pitch until ADR 44 caught it.
+    expect(html).toMatch(/\d+ clock designs/);
     expect(html).toContain('rel="canonical"');
     expect(html).toContain("https://ioan.dev/glu/welcome");
   });

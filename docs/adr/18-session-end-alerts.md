@@ -2,6 +2,26 @@
 
 - Status: Implemented (deviations noted)
 - Date: 2026-07-24
+- Amended: 2026-07-26 — **the Android escalation is taken** (ADR 33): a
+  notification-only service worker now exists, the alert path is SW-first
+  (`registration.showNotification()`, then the page constructor, then
+  chime-only), and ADR 04's constraint was amended as this ADR priced. The
+  platform truth table below stands as written for *page context*; the
+  "no service worker registered" acceptance criterion is superseded.
+
+- Amended: 2026-07-26b — **the chime is now one of nine sounds, and it has a
+  length** (ADR 40, owner brief: "this app lacks a variety of sounds… as well as
+  an option for their duration"). Three things here move and nothing else does.
+  The hard-coded two-tone pattern becomes the `chime` entry of a registry and
+  stays the **default**, so the shipped behaviour is byte-identical for anyone
+  who never opens Settings. "Once — no looping alarm" becomes "**Once by
+  default**, or a bounded 3 / 5 / 10 / 20 s"; the looping-alarm rejection below
+  stands as written, because every rung ends by itself, none of them needs a
+  dismissal UI, and any transport press cuts one short. And the sentence in
+  *Audio* that sends chime-choice to the settings ADR is **discharged** — that
+  is ADR 40's Alerts section. **Volume and mute did not move**: still the device
+  rocker, still penciled on ADR 19. When alerts fire, the notification, the
+  SW-first order and the three degrade layers are untouched.
 
 - Deviation (2026-07-24, implementation): "a live tick crossing zero" is
   implemented as the **`running → finished` transition**, tracked by the hook's
@@ -75,6 +95,11 @@ transitions state (no auto-restart, no auto-anything), spy-tested.
   while `Notification.permission === 'default'`; denied means never ask
   again (the browser remembers; we don't nag). No permission, no
   notification — chime still works.
+  **Superseded 2026-07-26c by ADR 41.** "Once" was only ever true of the user
+  who *answers*: a dismissed prompt leaves `permission` at `default`, so the
+  guard this bullet describes re-asked on every Start, forever. The rule is now
+  **at most three automatic asks**, counted in the blob, after which Settings →
+  Alerts is the only door. Everything else in this bullet stands.
 - **Platform truth table, recorded**: page-context `new Notification()`
   works on desktop-class browsers; **it throws `TypeError` on Android
   Chrome** (non-persistent notifications require a service worker there)
@@ -85,7 +110,7 @@ transitions state (no auto-restart, no auto-anything), spy-tested.
   matter: a minimal notification-only service worker (no fetch handler —
   not offline machinery), which requires an **ADR 04 amendment** because
   its "no service worker anywhere" constraint is product law. Named, not
-  taken.
+  taken. *Taken 2026-07-26 — ADR 33, exactly as priced.*
 - **Punctuality bound, recorded**: Chrome's intensive throttling can delay
   a long-backgrounded tab's timers up to ~60 s, so a background finish may
   chime/notify up to a minute late. Accepted for v1; the escalation is a
@@ -184,10 +209,10 @@ the pair stands.
 - [~] Backgrounded tab (real browser): the chime sounds and one "GLU — time's up" notification appears; clicking it focuses the app; returning to the tab closes it; a second finish replaces rather than stacks (same tag). — **[deferred → HUMAN-TODO]** (recorder + visibility emulation prove one tagged notification per finish; click-to-focus and close-on-return need a real OS notification)
 - [x] Manual Stop, `s`, `Ctrl+C`, and `n` produce no chime and no notification, at any remaining time.
 - [x] Close the site mid-run, reopen after expiry: the finished state restores **silently** (ADR 02's behavior byte-identical).
-- [~] The first Start after a fresh profile primes audio and triggers the browser's notification prompt exactly once; the timer starts without waiting for the prompt; declining leaves the chime working forever after with no re-prompt. — **[deferred → HUMAN-TODO]** (the ask-once/never-again logic is unit-tested; the real prompt needs a fresh browser profile)
+- [~] The first Start after a fresh profile primes audio and triggers the browser's notification prompt exactly once; the timer starts without waiting for the prompt; declining leaves the chime working forever after with no re-prompt. — **[deferred → HUMAN-TODO]** (the ask-once/never-again logic is unit-tested; the real prompt needs a fresh browser profile). **Amended 2026-07-26c (ADR 41)**: "exactly once" reads as "at most three times, then never"; the un-awaited-prompt half is now proven in e2e by a stub that never resolves.
 - [x] With `Notification` construction forced to throw (Android emulation or stub): finish still chimes, zero console errors.
 - [x] With sound impossible too (context resume rejected): the finished state still renders — alerts are courtesy, never load-bearing.
-- [x] No new UI elements, no blob/schema changes, no service worker registered (ADR 04's criterion still passes), no new dependency (`@mantine/notifications` remains absent from package.json).
+- [—] No new UI elements, no blob/schema changes, no service worker registered (ADR 04's criterion still passes), no new dependency (`@mantine/notifications` remains absent from package.json). — **the no-SW clause is superseded by ADR 33** (notification-only worker, fetch-handler-free by tripwire); every other clause stands.
 - [x] Unit suite covers outline step 4 including the no-transition spy; `npm test`, `npm run build`, `npm run build-storybook` green; the ADR 09 E2E lines are active and green.
 
 ## Consequences

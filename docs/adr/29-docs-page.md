@@ -36,6 +36,12 @@
   minimum-run ladder, which landed in the same tree while this was being
   written. Documenting a setting the moment it exists is the standing rule from
   this ADR's own Consequences, applied immediately.
+- Amended (2026-07-26): **"Install it like an app" moves from 11th of 15
+  sections to 2nd**, right after "What GLU is". Owner report: installability
+  was going unnoticed. The section order was never a stated acceptance
+  criterion — this is a prominence fix, not a rewrite; the copy is unchanged.
+  See also the same-day ADR 31 amendment, which does the equivalent for the
+  welcome page.
 
 ## Context
 

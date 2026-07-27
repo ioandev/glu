@@ -61,6 +61,13 @@ ci: lint test build
 icons:
     just web icons
 
+# Known-CVE audit of both packages (ADR 38) — the same gate security.yml runs.
+# The rest of the scanner fleet is CI-side; local equivalents are in
+# docs/security-scanning.md.
+audit:
+    just web audit
+    just backend audit
+
 # Needs both packages installed — run `just install` first. Each manifest also
 # embeds GLU's own NOTICE + LICENSE, so rerun this if either changes (ADR 23).
 

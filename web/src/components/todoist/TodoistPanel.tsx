@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Group, Stack, UnstyledButton } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { useGluStore } from "@/store/gluStore";
-import { focusedDescription } from "@/store/types";
+import { focusedDescription, type FocusedTask } from "@/store/types";
 import { useTodoistAuth } from "@/store/todoistAuth";
 import { FocusedTaskCard } from "./FocusedTaskCard";
+import { PullToRefresh } from "./PullToRefresh";
 import { SourcePicker } from "./SourcePicker";
 import { TaskDetail } from "./TaskDetail";
 import { TaskList } from "./TaskList";
@@ -26,47 +28,56 @@ import classes from "./todoist.module.css";
  */
 export function TodoistPanel() {
   const status = useTodoistAuth((s) => s.status);
+  const t = useTranslations("todoist");
   const { source, setSource } = useTodoistSource();
   const list = useTodoistList(status === "in" ? source : null);
   // Ephemeral, like every overlay (ADR 10's precedent): a reload opens nothing.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  // ADR 43: the list's scroll container, so the pull gesture can tell "at the
+  // top" from "scrolling".
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
 
   const setFocusedTask = useGluStore((s) => s.setFocusedTask);
   const { focusedTask, pendingCount, undoable, undo, totalNonce, commitPending } =
     useTimeComments();
+
+  // ADR 35: completing the focused task vacates the slot on tap; this snapshot
+  // is what undo — or a failed close — puts back. It restores only if nothing
+  // else has been focused meanwhile: a deliberate refocus outranks a revert.
+  const completionSnapshot = useRef<FocusedTask | null>(null);
+  const restoreFocus = (taskId: string) => {
+    const snapshot = completionSnapshot.current;
+    if (snapshot?.id !== taskId) return;
+    completionSnapshot.current = null;
+    if (!useGluStore.getState().focusedTask) setFocusedTask(snapshot);
+  };
+
   const completion = useTaskCompletion({
-    onCompleted: (taskId) => {
-      // A completed task is not in the source list any more; the focused slot
-      // keeps it for the undo window and then lets it go.
-      if (taskId !== focusedTask?.id) list.reload();
+    onCompleted: () => list.reload(),
+    onUndone: (taskId) => {
+      restoreFocus(taskId);
+      list.reload();
     },
-    onUndone: () => list.reload(),
+    onFailed: restoreFocus,
     // Cross-type displacement (ADR 20): a completion bar displacing a pending
     // *comment* commits the comment immediately — ADR 14's rule, unchanged.
     onDisplaceOther: commitPending,
   });
 
-  // When the completion undo window lapses on the focused task it auto-
-  // unfocuses: nothing returns to the list, because a completed task does not
-  // belong to the source list anyway (ADR 20).
+  // The snapshot dies with the undo affordance: once the bar lapses or is
+  // displaced without an undo, the completion is final and the slot stays
+  // empty. (In-flight — pending not yet set — the snapshot must survive for
+  // the failure revert, so only a matched-then-gone transition clears it.)
   const completionPending = completion.pending;
-  const wasCompletingFocused = useRef(false);
+  const prevPendingId = useRef<string | null>(null);
   useEffect(() => {
-    const focusedId = focusedTask?.id;
-    if (!focusedId) return;
-    if (completionPending?.taskId === focusedId) {
-      wasCompletingFocused.current = true;
-      return;
+    const prev = prevPendingId.current;
+    prevPendingId.current = completionPending?.taskId ?? null;
+    const snapshot = completionSnapshot.current;
+    if (snapshot && prev === snapshot.id && completionPending?.taskId !== snapshot.id) {
+      completionSnapshot.current = null;
     }
-    if (wasCompletingFocused.current && completion.completingIds.has(focusedId)) {
-      // The bar lapsed rather than being undone: let the slot go.
-      wasCompletingFocused.current = false;
-      setFocusedTask(null);
-    } else if (!completion.completingIds.has(focusedId)) {
-      // Undone: focus is restored exactly as it was.
-      wasCompletingFocused.current = false;
-    }
-  }, [completionPending, focusedTask, completion.completingIds, setFocusedTask]);
+  }, [completionPending]);
 
   /**
    * One bar, one message, newest wins (ADR 20). A completion message displaces
@@ -77,7 +88,7 @@ export function TodoistPanel() {
   const undoMessage: UndoMessage | null = completionPending
     ? {
         key: `complete:${completionPending.taskId}`,
-        text: `Completed · ${completionPending.title}`,
+        text: t("completed", { title: completionPending.title }),
         until: completionPending.until,
         error: completionPending.error,
         onUndo: () => void completion.undo(),
@@ -88,7 +99,7 @@ export function TodoistPanel() {
           badge: `[${undoable.minutes}m]`,
           // The same bar before and after the post lands (ADR 14 amendment,
           // c) — only the tense and the mechanic behind Undo change.
-          text: undoable.phase === "queued" ? "comment will be added" : "comment added",
+          text: undoable.phase === "queued" ? t("commentWillBeAdded") : t("commentAdded"),
           until: undoable.until,
           error: undoable.error,
           onUndo: () => void undo(undoable.runId),
@@ -115,7 +126,7 @@ export function TodoistPanel() {
           // the tab.
           <UnstyledButton
             className={`${classes.toolsButton} ${classes.refreshButton}`}
-            aria-label="Refresh tasks"
+            aria-label={t("refreshTasks")}
             aria-busy={list.refreshing}
             data-refreshing={list.refreshing || undefined}
             data-testid="task-refresh"
@@ -134,33 +145,49 @@ export function TodoistPanel() {
           totalMinutes={total?.minutes ?? null}
           pendingCount={pendingCount}
           gone={focusedGone}
-          completed={completion.completingIds.has(focusedTask.id)}
+          failed={completion.failedIds.has(focusedTask.id)}
           onOpen={() => setOpenTaskId(focusedTask.id)}
           onUnfocus={() => setFocusedTask(null)}
-          onComplete={() =>
-            void completion.complete({ id: focusedTask.id, title: focusedTask.title })
-          }
+          onComplete={() => {
+            // Vacate first (ADR 35): the tap is the moment the slot empties.
+            // `completingIds` keeps the card out of the list even though the
+            // unfocus lifts `excludeId` mid-flight.
+            completionSnapshot.current = focusedTask;
+            setFocusedTask(null);
+            void completion.complete({ id: focusedTask.id, title: focusedTask.title });
+          }}
         />
       ) : null}
 
       {status === "in" ? (
-        <TaskList
-          source={source}
-          list={list}
-          excludeId={focusedTask?.id ?? null}
-          completingIds={completion.completingIds}
-          failedIds={completion.failedIds}
-          onComplete={(task) => void completion.complete(task)}
-          onOpen={(task) => setOpenTaskId(task.id)}
-          onFocus={(task) =>
-            setFocusedTask({
-              id: task.id,
-              title: task.title,
-              priority: task.uiPriority,
-              description: focusedDescription(task.description),
-            })
-          }
-        />
+        // ADR 43: the pull gesture is a second way to press the header's
+        // refresh button — same `reload()`, same `refreshing` flag, so both
+        // paths spin and neither collapses the list to skeletons.
+        <PullToRefresh
+          refreshing={list.refreshing}
+          onRefresh={list.reload}
+          enabled={source !== null && !list.gone}
+          scrollRef={listScrollRef}
+        >
+          <TaskList
+            source={source}
+            list={list}
+            scrollRef={listScrollRef}
+            excludeId={focusedTask?.id ?? null}
+            completingIds={completion.completingIds}
+            failedIds={completion.failedIds}
+            onComplete={(task) => void completion.complete(task)}
+            onOpen={(task) => setOpenTaskId(task.id)}
+            onFocus={(task) =>
+              setFocusedTask({
+                id: task.id,
+                title: task.title,
+                priority: task.uiPriority,
+                description: focusedDescription(task.description),
+              })
+            }
+          />
+        </PullToRefresh>
       ) : null}
 
       <TaskDetail

@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
+import { OG_LOCALE, type Locale } from "@/lib/locale";
+import en from "@/locales/en";
 
 /**
  * One place for "what does GLU say about itself" — the titles, the meta
@@ -69,7 +72,17 @@ export interface PageCopy {
    * title is "GLU — GLU" helps nobody.
    */
   title?: string;
-  /** `<meta name="description">`, and the Open Graph / Twitter description. */
+  /**
+   * `<meta name="description">` in English (ADR 44). **Read from the English
+   * catalog, never written here** — the localised descriptions live in
+   * `locales/*.ts`, and a second copy in this table is a second place for a
+   * stale claim to hide. It did exactly that: this table said "eighteen clock
+   * designs" long after ADR 42 and ADR 45 took the roster past eighty.
+   *
+   * Still needed as a *value* because the root layout's defaults, the manifest
+   * and `siteMetadata.test.ts` are all outside a request and cannot call
+   * `getTranslations`.
+   */
   description: string;
   /** The card's headline. Two short lines at most — it is set at 74px. */
   heading: string;
@@ -86,8 +99,7 @@ export interface PageCopy {
  */
 export const PAGE_META: Record<SiteRoute, PageCopy> = {
   "/": {
-    description:
-      "A tablet-first pomodoro and focus timer: eighteen clock designs, environment tracking, a session record that stays on your device, and optional Todoist time logging.",
+    description: en.meta.homeDescription,
     heading: "Pomodoro and focus timer",
     blurb:
       "Eighteen clock designs, environment tracking, and a session record that never leaves your device.",
@@ -100,16 +112,14 @@ export const PAGE_META: Record<SiteRoute, PageCopy> = {
    */
   "/welcome": {
     title: "A focus timer for the tablet on your desk",
-    description:
-      "Pick a length, press start, and work until the clock runs out. GLU is a pomodoro timer with eighteen clock designs and no account — the record stays on your device.",
+    description: en.meta.welcomeDescription,
     heading: "A focus timer for your desk",
     blurb: "Pick a length, press start, work until the clock runs out. No account, no sign-up.",
     imageAlt: "GLU — a focus timer for the tablet on your desk",
   },
   "/privacy": {
     title: "Privacy Policy",
-    description:
-      "What GLU handles, where it goes, and what it never does. No accounts, no analytics, history stored on your own device.",
+    description: en.meta.privacyDescription,
     heading: "Privacy Policy",
     blurb:
       "No accounts, no analytics, no server copy. Your history stays on the device you focused on.",
@@ -117,16 +127,14 @@ export const PAGE_META: Record<SiteRoute, PageCopy> = {
   },
   "/terms": {
     title: "Terms of Service",
-    description:
-      "The terms for using GLU: a free personal focus timer, provided as-is, with your data on your device and your Todoist account your own.",
+    description: en.meta.termsDescription,
     heading: "Terms of Service",
     blurb: "A free personal focus timer, provided as-is. Your Todoist account stays yours.",
     imageAlt: "GLU — Terms of Service",
   },
   "/docs": {
     title: "How GLU works",
-    description:
-      "The GLU manual: the timer and its shortcuts, the clock gallery, environment toggles, the session record, alerts, and the optional Todoist connection.",
+    description: en.meta.docsDescription,
     heading: "How GLU works",
     blurb:
       "The manual: the timer and its shortcuts, the clock gallery, alerts, and the Todoist connection.",
@@ -148,6 +156,23 @@ export const SITE_TITLE = "GLU — pomodoro and focus timer";
  */
 export const OG_SITE = { type: "website", siteName: SITE_NAME, locale: "en_GB" } as const;
 
+/**
+ * `OG_SITE` for one language (ADR 44). Everything but `locale` is constant, and
+ * `locale` has to move or a German page advertises itself as `en_GB`.
+ */
+export function ogSite(locale: Locale) {
+  return { ...OG_SITE, locale: OG_LOCALE[locale] };
+}
+
+/** The `meta` catalog keys, by route — the one place the mapping is written. */
+const META_KEYS = {
+  "/": { title: "homeTitle", description: "homeDescription" },
+  "/welcome": { title: "welcomeTitle", description: "welcomeDescription" },
+  "/privacy": { title: "privacyTitle", description: "privacyDescription" },
+  "/terms": { title: "termsTitle", description: "termsDescription" },
+  "/docs": { title: "docsTitle", description: "docsDescription" },
+} as const;
+
 /** Same rule as `OG_SITE`: without this on the page, the card falls back to `summary`. */
 export const TWITTER_CARD = "summary_large_image" as const;
 
@@ -165,18 +190,40 @@ export const TWITTER_CARD = "summary_large_image" as const;
  * `og:image` *and* `twitter:image`, and the file convention is the only form
  * that resolves against `metadataBase` rather than being taken literally.
  */
-export function pageMetadata(route: SiteRoute): Metadata {
-  const copy = PAGE_META[route];
+/**
+ * Assembles a route's `Metadata` in the reader's language (ADR 30, ADR 44).
+ *
+ * The title lands in two different shapes on purpose. `title.template` applies
+ * to the `<title>` only, so the document reads "Privacy Policy — GLU" while
+ * `og:title` stays "Privacy Policy" — which is what an unfurler wants, because
+ * it renders `og:site_name` beside the title and would otherwise print "GLU"
+ * twice.
+ *
+ * **A cookieless request gets English**, which is to say every crawler does.
+ * That is deliberate and it is the price of having no locale in the URL: one
+ * canonical per page, indexed in one language. The card's image is English for
+ * the same reason and cannot be otherwise.
+ *
+ * No `images` key: each route's `opengraph-image.tsx` fills `og:image` *and*
+ * `twitter:image`, and the file convention is the only form that resolves
+ * against `metadataBase` rather than being taken literally.
+ */
+export async function pageMetadata(route: SiteRoute): Promise<Metadata> {
+  const locale = (await getLocale()) as Locale;
+  const t = await getTranslations("meta");
+  const keys = META_KEYS[route];
   const url = absoluteUrl(route);
+  const description = t(keys.description);
+
   // The home route has no `title` of its own — the layout's `title.default` is
   // already this page's title, and one here would run through the template.
-  const title = copy.title ? { title: copy.title } : {};
+  const title = route === "/" ? {} : { title: t(keys.title) };
 
   return {
     ...title,
-    description: copy.description,
+    description,
     alternates: { canonical: url },
-    openGraph: { ...OG_SITE, ...title, description: copy.description, url },
-    twitter: { card: TWITTER_CARD, ...title, description: copy.description },
+    openGraph: { ...ogSite(locale), ...title, description, url },
+    twitter: { card: TWITTER_CARD, ...title, description },
   };
 }

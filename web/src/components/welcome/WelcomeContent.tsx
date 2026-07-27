@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  WELCOME_EYEBROW,
-  WELCOME_HEADLINE,
-  WELCOME_SUB,
-  welcomeFeatures,
-  welcomeFootnote,
-} from "./WelcomeSections";
+import { useTranslations } from "next-intl";
+import { CLOCK_COUNT } from "@/clocks/registry";
 import classes from "./welcome.module.css";
 
 /**
@@ -28,18 +23,33 @@ import classes from "./welcome.module.css";
  * page, which is the worst way to fail.
  */
 export function WelcomeContent({ action }: { action: ReactNode }) {
+  const t = useTranslations("welcome");
+  const tDoc = useTranslations("document");
+  const tChrome = useTranslations("chrome");
+  // `<b>` is the only markup the pitch uses, so one chunk handler covers it.
+  const bold = { b: (chunks: ReactNode) => <b>{chunks}</b> };
+
+  const features = [
+    { title: t("featureClockTitle"), body: t.rich("featureClockBody", { ...bold, count: CLOCK_COUNT }) },
+    { title: t("featureEnvironmentTitle"), body: t.rich("featureEnvironmentBody", bold) },
+    { title: t("featureRecordTitle"), body: t.rich("featureRecordBody", bold) },
+    { title: t("featureTodoistTitle"), body: t.rich("featureTodoistBody", bold) },
+  ];
+
   return (
     <main className={classes.page}>
       <div className={classes.column}>
         <header className={classes.hero}>
-          <p className={classes.eyebrow}>{WELCOME_EYEBROW}</p>
-          <h1 className={classes.headline}>{WELCOME_HEADLINE}</h1>
-          <p className={classes.sub}>{WELCOME_SUB}</p>
+          <p className={classes.eyebrow}>{t("eyebrow")}</p>
+          <h1 className={classes.headline}>{t("headline")}</h1>
+          <p className={classes.sub}>{t("sub")}</p>
           <div className={classes.ctaRow}>{action}</div>
         </header>
 
+        <p className={classes.installCallout}>{t.rich("installNote", bold)}</p>
+
         <ul className={classes.features}>
-          {welcomeFeatures.map((feature) => (
+          {features.map((feature) => (
             <li key={feature.title} className={classes.feature}>
               <h2 className={classes.featureTitle}>{feature.title}</h2>
               <p className={classes.featureBody}>{feature.body}</p>
@@ -47,17 +57,17 @@ export function WelcomeContent({ action }: { action: ReactNode }) {
           ))}
         </ul>
 
-        <p className={classes.footnote}>{welcomeFootnote}</p>
+        <p className={classes.footnote}>{t("footnote")}</p>
 
-        <nav className={classes.footer} aria-label="About GLU">
+        <nav className={classes.footer} aria-label={t("aboutNavAriaLabel")}>
           <Link href="/docs" className={classes.footerLink}>
-            How GLU works
+            {tChrome("docsTitle")}
           </Link>
           <Link href="/privacy" className={classes.footerLink}>
-            Privacy Policy
+            {tDoc("privacy")}
           </Link>
           <Link href="/terms" className={classes.footerLink}>
-            Terms of Service
+            {tDoc("terms")}
           </Link>
           <a
             className={classes.footerLink}
@@ -65,7 +75,7 @@ export function WelcomeContent({ action }: { action: ReactNode }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Source on GitHub
+            {tDoc("sourceOnGitHub")}
           </a>
         </nav>
       </div>

@@ -37,6 +37,16 @@
   This ADR's decision text said "`id`/`start_url`/`scope` under `/glu/`"; read
   it as "under the app's basePath".
 
+- Amended: 2026-07-26 — **the no-service-worker law is restated as a
+  no-fetch-handler law** (ADR 33). Android Chrome cannot show a notification
+  from page context — the escalation ADR 18 named — so a *notification-only*
+  service worker (`public/sw.js`: skipWaiting + notificationclick, nothing
+  else) now registers. What this ADR was actually protecting is intact and now
+  machine-enforced: **no `fetch` listener, no caching, no offline, no update
+  machinery** — the e2e suite asserts the SW source registers no fetch handler,
+  replacing the old empty-Service-Workers-pane assertion (now exactly one
+  registration, scope `/glu/`). Any growth in `sw.js` is an ADR, not a tweak.
+
 - Deviation (2026-07-24, implementation): `theme_color` in the manifest keeps
   the mark's ink, but the `<meta name="theme-color">` variants use the default
   chrome's page bases (ADR 15) so the OS chrome matches the app in both schemes.
@@ -75,7 +85,9 @@ guard with tests.
 
 ## Decision
 
-- **We will ship no service worker at all.** The product declined offline; an
+- **We will ship no service worker at all.** *Amended 2026-07-26 (ADR 33): a
+  notification-only SW ships; "no fetch handler at all" is the surviving law —
+  see the amendment above.* The product declined offline; an
   SW's only remaining jobs here would be caching and update management — pure
   debugging surface with zero requirement behind it. Consequence accepted and
   recorded: with no network, an **already-open** app keeps running (the timer
@@ -190,7 +202,7 @@ two-device verification pass are all of it; there is no moving part left.
 - [x] Every icon `<link>` the page emits — both `rel="icon"` entries and `rel="apple-touch-icon"` — carries the `/glu` basePath and resolves 200 (e2e-asserted by fetching each emitted `href`, not by assuming the tag's presence).
 - [x] `scripts/generate-icons.mjs` is committed and re-runnable (delete outputs, run, identical set returns).
 - [x] The manifest is served under `/glu/`, and devtools → Application → Manifest shows no errors or warnings; `id`, `start_url`, `scope` all resolve under `/glu/`; 192 and 512 icons are listed and load.
-- [x] Chrome offers install **with the Service Workers pane empty** — `navigator.serviceWorker.getRegistrations()` returns `[]` on the prod build (asserted in the ADR 09 suite); the install *prompt* itself is part of the deferred on-device check.
+- [—] Chrome offers install **with the Service Workers pane empty** — `navigator.serviceWorker.getRegistrations()` returns `[]` on the prod build (asserted in the ADR 09 suite); the install *prompt* itself is part of the deferred on-device check. — **superseded by ADR 33** (exactly one registration, scope `/glu/`, source asserted fetch-handler-free; install criteria never needed the pane empty)
 - [~] The installed app launches standalone (no browser chrome) at the timer screen. — **ran 2026-07-25 on Android Chrome and FAILED**: the installed app opened with the in-app toolbar (title + origin, ✕, ⋮). Cause and fix in the 2026-07-25 scope amendment above; the trailing slash made every launch out-of-scope. Back to **[deferred → HUMAN-TODO]** until the fix is deployed and the app is reinstalled (a WebAPK re-mints from the new manifest, so the old install must go).
 - [~] iPad Safari Add-to-Home-Screen yields a standalone app with the correct icon on a solid background (no black square). — **[deferred → HUMAN-TODO]** (needs a real install surface / real network cut)
 - [~] With the network cut while the installed app is open, a running timer keeps counting; a reload without network shows the browser offline page, and after reconnecting the app restores its localStorage state per ADR 02. — **[deferred → HUMAN-TODO]** (needs a real install surface / real network cut)

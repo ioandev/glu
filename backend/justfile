@@ -36,6 +36,12 @@ watch:
 lint:
     npm run lint
 
+# The full report first (informational, never fails the recipe), then the
+# gate CI enforces: production deps, high or critical (ADR 38).
+audit:
+    -npm audit
+    npm audit --omit=dev --audit-level=high
+
 # Never overwrites an existing file — the real one holds Todoist secrets and is
 # gitignored.
 

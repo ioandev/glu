@@ -1,4 +1,6 @@
 import { DataList, LegalLink, type LegalSection } from "@/components/legal/LegalPage";
+import type { DocumentContent } from "./types";
+import { CLOCK_COUNT } from "@/clocks/registry";
 
 /**
  * The GLU manual (ADR 29) — **one document, rendered by two surfaces**: the
@@ -17,11 +19,11 @@ import { DataList, LegalLink, type LegalSection } from "@/components/legal/Legal
  * Kept free of Mantine and of store hooks on purpose: the route renders this on
  * the server with no client JavaScript, and the modal code-splits it.
  */
-export const DOCS_UPDATED = "25 July 2026";
+const updated = "26 July 2026";
 
-export const DOCS_TITLE = "How GLU works";
+const title = "How GLU works";
 
-export const docsIntro = (
+const intro = (
   <>
     GLU is a focus timer built for a tablet propped up next to you while you work.
     This page is everything it does — the timer, the clock gallery, the environment
@@ -30,7 +32,7 @@ export const docsIntro = (
   </>
 );
 
-export const docsSections: LegalSection[] = [
+const sections: LegalSection[] = [
   {
     heading: "What GLU is",
     body: (
@@ -59,6 +61,21 @@ export const docsSections: LegalSection[] = [
     ),
   },
   {
+    heading: "Install it like an app",
+    body: (
+      <p>
+        GLU can be installed to a home screen or desktop — &ldquo;Install
+        app&rdquo; in the browser menu on Android, &ldquo;Add to Home Screen&rdquo;
+        on an iPad, the install control in the address bar on a desktop browser —
+        and it then opens without browser chrome, which is the right look for a
+        timer on a stand. On Android, pick the <i>Install</i> wording where both
+        appear: the plain shortcut keeps a browser bar at the top. <b>It is not an offline app</b>: it needs
+        a connection every time it starts. Nothing else changes; it is the same app,
+        with the same data, in a different window.
+      </p>
+    ),
+  },
+  {
     heading: "The timer",
     body: (
       <>
@@ -69,9 +86,11 @@ export const docsSections: LegalSection[] = [
           rather than waiting for it to finish.
         </p>
         <p>
-          Below the clock: <b>Start</b>, <b>Pause</b> and <b>Stop</b> — the biggest
-          targets on the screen, because they are the ones you reach for without
-          looking. Under them, <b>+1 / +5 / −1 / −5</b>, which mean one of two
+          Below the clock, two buttons — the biggest targets on the screen, because
+          they are the ones you reach for without looking. The first one always
+          names what it is about to do: <b>Start</b> when nothing is running,{" "}
+          <b>Pause</b> while it is, <b>Resume</b> once you have paused. The second
+          is <b>Stop</b>. Under them, <b>+1 / +5 / −1 / −5</b>, which mean one of two
           things depending on what the timer is doing.
         </p>
         <p>
@@ -99,7 +118,7 @@ export const docsSections: LegalSection[] = [
             {
               term: "Paused",
               detail:
-                "Held where you left it. Press Pause again, or Start, to carry on from the same second.",
+                "Held where you left it. Press Resume to carry on from the same second.",
             },
             {
               term: "Finished",
@@ -113,7 +132,7 @@ export const docsSections: LegalSection[] = [
           It counts from the time it started rather than from ticks it has to stay
           awake to receive, so coming back to the tab shows the correct remaining
           time, not a clock that paused when the screen did. If a run expired while
-          you were away, you will find it finished and silent — the chime is for the
+          you were away, you will find it finished and silent — the sound is for the
           moment it happens, not for hours later.
         </p>
       </>
@@ -142,8 +161,9 @@ export const docsSections: LegalSection[] = [
         />
         <p>
           Shortcuts never fire while you are typing in a text field, and holding a
-          key down does not repeat the action. The Pause and Stop buttons name their
-          shortcut in a tooltip, so there is nothing to memorise from this page.
+          key down does not repeat the action. Stop names its shortcut in a tooltip,
+          and so does the first button once there is a run to pause or resume, so
+          there is nothing to memorise from this page.
         </p>
       </>
     ),
@@ -153,7 +173,8 @@ export const docsSections: LegalSection[] = [
     body: (
       <>
         <p>
-          There are <b>18 clock designs</b>, and the one on screen is a choice, not
+          There are{" "}
+          <b>{CLOCK_COUNT} clock designs</b>, and the one on screen is a choice, not
           a default you are stuck with. <b>Swipe the clock sideways</b> to move
           through them; on a wide screen there are also chevrons either side of the
           clock, resting faint until you hover or focus them. On a narrow screen a
@@ -201,7 +222,7 @@ export const docsSections: LegalSection[] = [
         </p>
         <p>
           <b>Silence is not a mute button.</b> It says how you worked. The
-          end-of-run chime is controlled by your device&rsquo;s volume, and nothing
+          end-of-run sound is controlled by your device&rsquo;s volume, and nothing
           else.
         </p>
       </>
@@ -241,16 +262,40 @@ export const docsSections: LegalSection[] = [
     body: (
       <>
         <p>
-          When a run reaches zero while GLU is open, it plays a short two-tone chime
-          — generated in the browser, so nothing is downloaded and nothing loops.
-          Its volume is your device&rsquo;s volume.
+          When a run reaches zero while GLU is open, it plays a sound — generated in
+          the browser, so nothing is downloaded. Its volume is your
+          device&rsquo;s volume.
         </p>
+        <p>
+          Under <b>Settings → Alerts</b> you pick which one, from nine:
+        </p>
+        <DataList
+          items={[
+            {
+              term: "Sound",
+              detail:
+                "Chime (the default), Bell, Wood, Rise, Settle, Pulse, Digital, Glass or Deep. Tapping one plays it, so you choose with your ears; tapping the one that is playing stops it.",
+            },
+            {
+              term: "How long it plays",
+              detail:
+                "Once by default — the sound plays through a single time. Pick 3, 5, 10 or 20 seconds and it repeats until that much time has passed; the last repeat always finishes, so it can run a moment longer. Pressing Start, Pause, Resume or Stop — or their keys — cuts it short.",
+            },
+          ]}
+        />
         <p>
           <b>If the tab is in the background, you also get one notification</b>{" "}
           (&ldquo;GLU — time&rsquo;s up&rdquo;), which focuses the app when you click
           it. A visible page is never notified — you are already looking at it.
-          Permission is asked once, the first time you press Start, and if you say no
-          you will not be asked again; the chime works either way.
+          The sound works either way.
+        </p>
+        <p>
+          <b>Settings → Alerts</b> leads with a switch for this. Turning it on asks
+          your browser for permission, and turning it off stops the notifications
+          without touching the sound. GLU also asks when you press Start, at most
+          three times — after that it stops asking for good, and the switch is the
+          way in. If your browser is blocking notifications the switch will say so,
+          and tell you where to change it.
         </p>
         <p>
           <b>Stopping a run yourself is deliberately silent</b>, as is a run that
@@ -258,10 +303,12 @@ export const docsSections: LegalSection[] = [
           are not watching — not to congratulate you for pressing Stop.
         </p>
         <p>
-          On iPad Safari and on Android Chrome, browser notifications from a page
-          like this one are not available; GLU falls back to the chime alone. Those
-          are exactly the devices likely to be sitting in front of you with the
-          screen kept on, so the chime is the alert that matters there anyway.
+          On Android Chrome the notification is delivered by a small background
+          helper that exists only for this purpose — it stores nothing, never
+          touches the network, and changes nothing else about how GLU loads. On
+          iPad, Safari does not offer notifications to a browser tab, so GLU
+          falls back to the sound alone there — usually the device propped up in
+          front of you with the screen kept on anyway.
         </p>
       </>
     ),
@@ -284,7 +331,7 @@ export const docsSections: LegalSection[] = [
             {
               term: "Stay awake when the timer is running",
               detail:
-                "On by default. Keeps the screen on during a run, and for five minutes after it pauses or ends, so you are not looking at a black screen when the chime goes.",
+                "On by default. Keeps the screen on during a run, and for five minutes after it pauses or ends, so you are not looking at a black screen when the sound goes.",
             },
           ]}
         />
@@ -342,7 +389,17 @@ export const docsSections: LegalSection[] = [
             {
               term: "Choosing what to show",
               detail:
-                "The tools icon opens the source picker: a filter, a label, or a project. Projects show their sections as headers, in order. Long lists show the first 200 tasks and say so.",
+                "The tools icon opens the source picker: a filter, a label, or a project. A project groups its tasks under a header for each section, in order, with unsectioned tasks first. A filter or a label groups every task by project too — \"Work / Today\", or just \"Work\" when the task has no section — since one of its results could belong to any project, and is ordered the way Todoist orders one by default: priority first, then date, then deadline, then where the task sits in your projects, except that a filter built around dates is still ordered priority-first here. Long lists show the first 200 tasks and say so.",
+            },
+            {
+              term: "Shortening a long section",
+              detail:
+                "Settings → Tasks limits how many tasks each section shows — 10, 20, 50, 100, or all of them, which is the default. Anything over the limit sits behind a \"+N more\" line you can tap to see the rest of that section; the next visit starts capped again.",
+            },
+            {
+              term: "Refreshing the list",
+              detail:
+                "The list refetches when you pick a source and whenever you come back to the tab — it never polls in the background. To ask for it yourself, pull the list down with a finger until the refresh icon fills in, then let go: it spins until the new list arrives and then slides away. The refresh icon in the top-right corner does exactly the same thing.",
             },
             {
               term: "Completing a task",
@@ -386,21 +443,6 @@ export const docsSections: LegalSection[] = [
     ),
   },
   {
-    heading: "Install it like an app",
-    body: (
-      <p>
-        GLU can be installed to a home screen or desktop — &ldquo;Install
-        app&rdquo; in the browser menu on Android, &ldquo;Add to Home Screen&rdquo;
-        on an iPad, the install control in the address bar on a desktop browser —
-        and it then opens without browser chrome, which is the right look for a
-        timer on a stand. On Android, pick the <i>Install</i> wording where both
-        appear: the plain shortcut keeps a browser bar at the top. <b>It is not an offline app</b>: it needs
-        a connection every time it starts. Nothing else changes; it is the same app,
-        with the same data, in a different window.
-      </p>
-    ),
-  },
-  {
     heading: "Two layouts",
     body: (
       <>
@@ -433,7 +475,7 @@ export const docsSections: LegalSection[] = [
             {
               term: "Settings",
               detail:
-                "Todoist (log in or out), Screen (the two stay-awake switches), and Time comments (what gets posted to Todoist, and when).",
+                "Todoist (log in or out), Tasks (how many items a section shows), Screen (the two stay-awake switches), and Time comments (what gets posted to Todoist, and when).",
             },
           ]}
         />
@@ -486,3 +528,12 @@ export const docsSections: LegalSection[] = [
     ),
   },
 ];
+
+/**
+ * The manual, in English — the language it is authored in, and the one every
+ * translation is made from (ADR 44). No `notice`: the manual describes the app
+ * rather than binding anyone, so a translated one is simply the manual.
+ */
+const content: DocumentContent = { updated, title, intro, sections };
+
+export default content;

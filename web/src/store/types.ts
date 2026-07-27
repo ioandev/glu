@@ -160,3 +160,54 @@ export function commentThresholdMs(minutes: unknown): number {
 
 /** ADR 14: 28 days, in minutes — the cap on any single comment and the total. */
 export const MAX_COMMENT_MINUTES = 40_320;
+
+/**
+ * ADR 39: how many tasks a single section run renders before the rest hide
+ * behind a `+N more` line.
+ *
+ * **`0` is the "All" rung**, and it is falsy — every read site compares against
+ * `SECTION_ITEM_LIMIT_ALL` by name, never `limit ? … : …`, or the one value
+ * meaning *no ceiling* becomes the one value meaning *no tasks*. `Infinity` is
+ * not an option: it does not survive `JSON.stringify` (it lands as `null`), and
+ * `null` in the blob is indistinguishable from a field that was never written.
+ */
+export const SECTION_ITEM_LIMIT_ALL = 0;
+
+export const SECTION_ITEM_LIMIT_CHOICES = [10, 20, 50, 100, SECTION_ITEM_LIMIT_ALL] as const;
+
+/**
+ * All, so the row exists to move off the shipped behaviour rather than to
+ * establish it (ADR 17's pattern, ADR 28's precedent). A default ceiling would
+ * silently drop rows for every user who never opens Settings.
+ */
+export const DEFAULT_SECTION_ITEM_LIMIT = SECTION_ITEM_LIMIT_ALL;
+
+/**
+ * Same posture as `resolveCommentThresholdMinutes`: the blob is hand-editable
+ * and the ladder may gain or lose a rung, so an unrecognised value reads as the
+ * default — never as a three-task list nobody can explain.
+ */
+export function resolveSectionItemLimit(value: unknown): number {
+  return (SECTION_ITEM_LIMIT_CHOICES as readonly unknown[]).includes(value)
+    ? (value as number)
+    : DEFAULT_SECTION_ITEM_LIMIT;
+}
+
+/**
+ * ADR 41: how many times GLU may raise the notification prompt on its own
+ * before it stops for good. Three, which is also where Chrome's own patience
+ * with dismissals runs out — so GLU goes quiet at about the moment the platform
+ * does, instead of calling an API that no longer renders anything.
+ */
+export const ALERT_PROMPT_LIMIT = 3;
+
+/**
+ * The blob's first *quota* field, and quotas need this rule spelled out or they
+ * fail closed forever: a hand-edited or corrupt counter reads as **zero spent**,
+ * never as a spent budget. Erring the other way would take the automatic ask
+ * away from someone who never dismissed anything, and they would have no way to
+ * tell — the Settings row is their door either way (ADR 41).
+ */
+export function resolveAlertPromptsUsed(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+}

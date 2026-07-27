@@ -17,7 +17,7 @@ describe("gallery flipping (ADR 08)", () => {
     expect(CLOCKS[0].id).toBe(DEFAULT_CLOCK_ID);
   });
 
-  it("cycles through all 18 and returns to the start", () => {
+  it("cycles through the whole roster and returns to the start", () => {
     const seen: string[] = [];
     for (let i = 0; i < CLOCKS.length; i += 1) {
       seen.push(store().activeClockId);

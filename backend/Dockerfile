@@ -27,6 +27,9 @@ WORKDIR /app
 # Fixed UID/GID 5331 — matches the host deploy perms for glu-api (server-2-perms).
 # Replaces node:alpine's default `node` (uid 1000); GLU is stateless, mounts nothing.
 RUN addgroup -g 5331 -S app && adduser -u 5331 -S -G app -h /app -H app
+# npm never runs in this image (CMD is plain `node`); its vendored deps are
+# what image scanners flag, so drop the whole toolchain from the runtime.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 # Secrets (TODOIST_CLIENT_ID/_SECRET, SESSION_SECRET, PUBLIC_ORIGIN) come from
 # the environment at run time — compose's `env_file` — never baked into a layer.
 ENV NODE_ENV=production API_PORT=4000

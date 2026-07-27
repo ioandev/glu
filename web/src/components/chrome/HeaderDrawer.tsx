@@ -23,6 +23,7 @@ import {
   IconSettings,
   IconSun,
 } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { SettingsContent } from "@/components/settings/SettingsContent";
 import { useResolvedScheme } from "@/hooks/useResolvedScheme";
 import classes from "./headerDrawer.module.css";
@@ -35,13 +36,23 @@ export const GITHUB_URL = "https://github.com/ioandev/glu";
  * `ssr: false` because the only thing that renders it is a modal that cannot be
  * open on first render anyway.
  */
+/**
+ * Its own component because `loading` is evaluated at module scope, where
+ * `useTranslations` cannot be called — the hook has to run inside something
+ * React renders (ADR 44).
+ */
+function DocsLoading() {
+  const t = useTranslations("chrome");
+  return (
+    <Text size="sm" c="dimmed">
+      {t("loading")}
+    </Text>
+  );
+}
+
 const DocsModalBody = dynamic(() => import("@/components/docs/DocsModalBody"), {
   ssr: false,
-  loading: () => (
-    <Text size="sm" c="dimmed">
-      Loading…
-    </Text>
-  ),
+  loading: () => <DocsLoading />,
 });
 
 /**
@@ -55,6 +66,7 @@ const DocsModalBody = dynamic(() => import("@/components/docs/DocsModalBody"), {
  * chrome state.
  */
 export function HeaderDrawer() {
+  const t = useTranslations("chrome");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
@@ -68,7 +80,7 @@ export function HeaderDrawer() {
         className={classes.arrow}
         variant="subtle"
         size={44}
-        aria-label="Open header"
+        aria-label={t("openHeader")}
         aria-expanded={drawerOpen}
         onClick={() => setDrawerOpen(true)}
       >
@@ -80,9 +92,9 @@ export function HeaderDrawer() {
         onClose={() => setDrawerOpen(false)}
         position="right"
         size={320}
-        title="GLU"
+        title={t("drawerTitle")}
         classNames={{ content: classes.panel, header: classes.panelHeader }}
-        closeButtonProps={{ "aria-label": "Close header" }}
+        closeButtonProps={{ "aria-label": t("closeHeader") }}
         transitionProps={{ duration: 0 }}
       >
         <Stack gap="xs">
@@ -96,7 +108,7 @@ export function HeaderDrawer() {
             underline="never"
           >
             <IconBrandGithub size={20} />
-            <span className={classes.rowLabel}>GitHub</span>
+            <span className={classes.rowLabel}>{t("github")}</span>
             <IconExternalLink size={16} className={classes.rowTrailing} />
           </Anchor>
 
@@ -106,15 +118,15 @@ export function HeaderDrawer() {
             aria-label={
               mounted
                 ? isDark
-                  ? "Switch to light theme"
-                  : "Switch to dark theme"
-                : "Toggle colour scheme"
+                  ? t("switchToLight")
+                  : t("switchToDark")
+                : t("toggleScheme")
             }
           >
             {mounted && isDark ? <IconSun size={20} /> : <IconMoon size={20} />}
-            <span className={classes.rowLabel}>Appearance</span>
+            <span className={classes.rowLabel}>{t("appearance")}</span>
             <Text component="span" className={classes.rowTrailing} size="sm">
-              {mounted ? (isDark ? "Dark" : "Light") : ""}
+              {mounted ? (isDark ? t("dark") : t("light")) : ""}
             </Text>
           </UnstyledButton>
 
@@ -125,13 +137,13 @@ export function HeaderDrawer() {
               sits above Settings. */}
           <UnstyledButton className={classes.row} onClick={() => setDocsOpen(true)}>
             <IconBook size={20} />
-            <span className={classes.rowLabel}>Docs</span>
+            <span className={classes.rowLabel}>{t("docs")}</span>
             <span className={classes.rowTrailing}>›</span>
           </UnstyledButton>
 
           <UnstyledButton className={classes.row} onClick={() => setSettingsOpen(true)}>
             <IconSettings size={20} />
-            <span className={classes.rowLabel}>Settings</span>
+            <span className={classes.rowLabel}>{t("settings")}</span>
             <span className={classes.rowTrailing}>›</span>
           </UnstyledButton>
         </Stack>
@@ -141,7 +153,7 @@ export function HeaderDrawer() {
             leaving the app tears down the wake lock, the primed AudioContext
             and the notification gesture; `next/link` because a hand-written
             `/privacy` would land on the *sibling site's* policy. */}
-        <nav className={classes.legal} aria-label="Legal">
+        <nav className={classes.legal} aria-label={t("legalAriaLabel")}>
           <Anchor
             component={Link}
             href="/privacy"
@@ -150,7 +162,7 @@ export function HeaderDrawer() {
             rel="noopener noreferrer"
             underline="never"
           >
-            Privacy Policy
+            {t("privacy")}
           </Anchor>
           <Anchor
             component={Link}
@@ -160,7 +172,7 @@ export function HeaderDrawer() {
             rel="noopener noreferrer"
             underline="never"
           >
-            Terms of Service
+            {t("terms")}
           </Anchor>
         </nav>
       </Drawer>
@@ -172,11 +184,11 @@ export function HeaderDrawer() {
       <Modal
         opened={docsOpen}
         onClose={() => setDocsOpen(false)}
-        title="How GLU works"
+        title={t("docsTitle")}
         size="90%"
         fullScreen={fullScreenModal}
         classNames={{ content: classes.panel, header: classes.panelHeader }}
-        closeButtonProps={{ "aria-label": "Close docs" }}
+        closeButtonProps={{ "aria-label": t("closeDocs") }}
         transitionProps={{ duration: 0 }}
       >
         {docsOpen && <DocsModalBody />}
@@ -185,13 +197,13 @@ export function HeaderDrawer() {
       <Modal
         opened={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        title="Settings"
+        title={t("settingsTitle")}
         // Large by design (ADR 19): the four penciled settings each arrive as
         // one more section row, not a layout renegotiation.
         size="90%"
         fullScreen={fullScreenModal}
         classNames={{ content: classes.panel, header: classes.panelHeader }}
-        closeButtonProps={{ "aria-label": "Close settings" }}
+        closeButtonProps={{ "aria-label": t("closeSettings") }}
         transitionProps={{ duration: 0 }}
       >
         <SettingsContent />

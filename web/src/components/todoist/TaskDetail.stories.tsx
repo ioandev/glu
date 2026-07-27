@@ -24,6 +24,7 @@ const detail = (patch: Partial<TaskDetailState> = {}): TaskDetailState => ({
     description:
       "Scheme applies before first paint.\nCheck the bootstrap script order — the token map must resolve synchronously.",
     uiPriority: 1,
+    projectId: null,
     sectionId: null,
     order: 0,
   },
@@ -74,6 +75,7 @@ export const LongDescription: Story = {
           "\n",
         ),
         uiPriority: 3,
+        projectId: null,
         sectionId: null,
         order: 0,
       },

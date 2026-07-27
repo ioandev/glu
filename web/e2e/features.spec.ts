@@ -1,4 +1,5 @@
 import { expect, readBlob, seed, test } from "./fixtures";
+import { CLOCKS } from "@/clocks/registry";
 
 const MINUTE = 60_000;
 
@@ -10,7 +11,11 @@ async function dismissTakeover(page: import("@playwright/test").Page) {
   const overlay = page.getByTestId("takeover-overlay");
   // Retry: the entrance sweep can still be settling when we arrive, and a click
   // mid-animation is swallowed. Poll until the overlay is genuinely gone.
-  for (let attempt = 0; attempt < 5 && (await overlay.count()) > 0; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < 5 && (await overlay.count()) > 0;
+    attempt += 1
+  ) {
     await tapClock(page).catch(() => {});
     await overlay.waitFor({ state: "detached", timeout: 1500 }).catch(() => {});
   }
@@ -58,7 +63,6 @@ async function flipClock(page: import("@playwright/test").Page, step: 1 | -1) {
   await page.mouse.move(cx - step * 120, cy, { steps: 8 });
   await page.mouse.up();
 }
-
 
 /* ------------------------------------------------------------------------- */
 /* ADR 05 — session tracking                                                  */
@@ -128,7 +132,9 @@ test.describe("sessions (ADR 05)", () => {
       durationMs: 20 * MINUTE,
       environment: seed().state.environment,
     }));
-    await seedStorage(seed({ day: { startedAt: 1_700_000_000_000, sessions } }));
+    await seedStorage(
+      seed({ day: { startedAt: 1_700_000_000_000, sessions } }),
+    );
 
     await open();
     await expect(page.getByTestId("session-count")).toHaveText("3 today");
@@ -140,11 +146,15 @@ test.describe("sessions (ADR 05)", () => {
     await page.getByRole("button", { name: "New day" }).click();
     await page.getByRole("button", { name: "Reset" }).click();
     await expect(page.getByTestId("session-count")).toHaveText("0 today");
-    await expect.poll(async () => (await readBlob(page))?.archive.length).toBe(1);
+    await expect
+      .poll(async () => (await readBlob(page))?.archive.length)
+      .toBe(1);
 
     await page.reload({ waitUntil: "load" });
     await expect(page.getByTestId("session-count")).toHaveText("0 today");
-    await expect.poll(async () => (await readBlob(page))?.archive.length).toBe(1);
+    await expect
+      .poll(async () => (await readBlob(page))?.archive.length)
+      .toBe(1);
   });
 
   test("a v1 blob migrates in place, preserving a running timer", async ({
@@ -182,10 +192,15 @@ test.describe("sessions (ADR 05)", () => {
     await expect(page.getByTestId("clock-slot")).toContainText("06:00");
     await expect(page.getByTestId("session-count")).toHaveText("0 today");
 
-    // A transition writes the v2 blob back and drops v1.
+    // A transition writes the v2 blob back and drops v1. The restored blob is
+    // running, so the primary transport button reads Pause (ADR 37).
     await page.getByRole("button", { name: "Pause" }).click();
     await expect
-      .poll(() => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("glu"))))
+      .poll(() =>
+        page.evaluate(() =>
+          Object.keys(localStorage).filter((k) => k.startsWith("glu")),
+        ),
+      )
       .toEqual(["glu:v2"]);
     await expect
       .poll(async () => (await readBlob(page))?.environment)
@@ -202,15 +217,22 @@ test.describe("keyboard (ADR 06)", () => {
     await page.clock.install();
   });
 
-  test("s stops, p toggles, n restarts at the selected duration", async ({ page, open }) => {
+  test("s stops, p toggles, n restarts at the selected duration", async ({
+    page,
+    open,
+  }) => {
     await open();
     await page.getByRole("button", { name: "Start" }).click();
     await page.clock.fastForward("00:20");
 
     await page.keyboard.press("p");
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("paused");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("paused");
     await page.keyboard.press("p");
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("running");
 
     // `n` after a ± adjustment restarts at the *selected* duration.
     await page.getByRole("button", { name: /Add 5 minutes/ }).click();
@@ -223,21 +245,42 @@ test.describe("keyboard (ADR 06)", () => {
   });
 
   test("Ctrl+C stops only when nothing is selected", async ({ page, open }) => {
+    /*
+     * The selection is made in the **docs modal**, and it has to be: the app is
+     * a touch surface, so `globals.css` turns `user-select` off for the whole
+     * body and lifts it again only where copying is the point — the manual, the
+     * legal pages, and a Todoist task's detail. Selecting the session count (as
+     * this test used to) produces a *range* but an empty `toString()`, so it
+     * was asserting a state the app cannot actually be in.
+     *
+     * Reading the manual mid-run and copying a line out of it is also the real
+     * scenario the guard exists for.
+     */
     await open();
     await page.getByRole("button", { name: "Start" }).click();
+    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
 
-    // With a selection it stays the copy shortcut, untouched.
-    await page.evaluate(() => {
-      const target = document.querySelector('[data-testid="session-count"]');
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Docs").click();
+    await page.getByTestId("docs-modal-body").waitFor();
+
+    const selected = await page.evaluate(() => {
+      const target = document.querySelector('[data-testid="docs-modal-body"] p');
       const range = document.createRange();
       range.selectNodeContents(target!);
       const selection = window.getSelection()!;
       selection.removeAllRanges();
       selection.addRange(range);
+      return selection.toString();
     });
+    // Guard the guard: an empty selection would make the next assertion pass
+    // for the wrong reason, which is exactly how this test rotted before.
+    expect(selected.length).toBeGreaterThan(0);
+
     await page.keyboard.press("Control+c");
     await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
 
+    // Nothing selected: the shortcut is the app's again.
     await page.evaluate(() => window.getSelection()?.removeAllRanges());
     await page.keyboard.press("Control+c");
     await expect.poll(async () => (await readBlob(page))?.status).toBe("idle");
@@ -250,9 +293,11 @@ test.describe("keyboard (ADR 06)", () => {
 
 test.describe("clock gallery (ADR 08)", () => {
   const pageBackground = (page: import("@playwright/test").Page) =>
-    page.evaluate(() =>
-      getComputedStyle(document.querySelector('[aria-label="Timer"]')!.parentElement!)
-        .backgroundColor,
+    page.evaluate(
+      () =>
+        getComputedStyle(
+          document.querySelector('[aria-label="Timer"]')!.parentElement!,
+        ).backgroundColor,
     );
 
   test("@smoke flipping changes the clock and repaints the page, and survives a reload", async ({
@@ -260,33 +305,64 @@ test.describe("clock gallery (ADR 08)", () => {
     open,
   }) => {
     await open();
-    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "halo");
+    await expect(page.getByTestId("clock-slot")).toHaveAttribute(
+      "data-clock-id",
+      "halo",
+    );
     const before = await pageBackground(page);
 
     await flipClock(page, 1);
-    await expect(page.getByTestId("clock-slot")).not.toHaveAttribute("data-clock-id", "halo");
+    await expect(page.getByTestId("clock-slot")).not.toHaveAttribute(
+      "data-clock-id",
+      "halo",
+    );
     await expect.poll(() => pageBackground(page)).not.toBe(before);
 
-    const chosen = await page.getByTestId("clock-slot").getAttribute("data-clock-id");
+    const chosen = await page
+      .getByTestId("clock-slot")
+      .getAttribute("data-clock-id");
     await page.reload({ waitUntil: "load" });
-    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", chosen!);
+    await expect(page.getByTestId("clock-slot")).toHaveAttribute(
+      "data-clock-id",
+      chosen!,
+    );
   });
 
   test("wraps at both ends", async ({ page, open }) => {
+    /*
+     * The two ends are **derived, never named** (ADR 42). This test used to
+     * assert `"edge"` was the last design, which was true of a roster of
+     * eighteen and quietly stopped being true twice — at ADR 42's forty and
+     * again at ADR 45's eighty-six. A test that writes the roster down is the
+     * same defect ADR 42 removed from the docs page and the stories.
+     */
+    const first = CLOCKS[0].id;
+    const last = CLOCKS[CLOCKS.length - 1].id;
+
     await open();
     await flipClock(page, -1);
-    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "edge");
+    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", last);
     await flipClock(page, 1);
-    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "halo");
+    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", first);
   });
 
-  test("an unknown clock id falls back to Halo", async ({ page, open, seedStorage }) => {
+  test("an unknown clock id falls back to Halo", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     await seedStorage(seed({ activeClockId: "not-a-clock" }));
     await open();
-    await expect(page.getByTestId("clock-slot")).toHaveAttribute("data-clock-id", "halo");
+    await expect(page.getByTestId("clock-slot")).toHaveAttribute(
+      "data-clock-id",
+      "halo",
+    );
   });
 
-  test("a running timer keeps counting across flips", async ({ page, open }) => {
+  test("a running timer keeps counting across flips", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
     await page.getByRole("button", { name: "Start" }).click();
@@ -296,7 +372,10 @@ test.describe("clock gallery (ADR 08)", () => {
     await expect(page.getByTestId("clock-slot")).toContainText("19:00");
   });
 
-  test("the session display can be switched off and stays off", async ({ page, open }) => {
+  test("the session display can be switched off and stays off", async ({
+    page,
+    open,
+  }) => {
     await open();
     await expect(page.getByTestId("clock-session")).toBeVisible();
     await page.getByLabel("Show sessions").click();
@@ -305,7 +384,10 @@ test.describe("clock gallery (ADR 08)", () => {
     await expect(page.getByTestId("clock-session")).toHaveCount(0);
   });
 
-  test("a horizontal swipe flips; a vertical drag never does", async ({ page, open }) => {
+  test("a horizontal swipe flips; a vertical drag never does", async ({
+    page,
+    open,
+  }) => {
     await open();
     const slot = page.getByTestId("clock-slot");
     const box = (await slot.boundingBox())!;
@@ -335,7 +417,9 @@ test.describe("clock gallery (ADR 08)", () => {
     if ((page.viewportSize()?.width ?? 0) >= SM_BREAKPOINT) {
       // Present enough to be found, quiet enough not to compete with the clock.
       await expect(next).toBeVisible();
-      expect(await next.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.1");
+      expect(await next.evaluate((el) => getComputedStyle(el).opacity)).toBe(
+        "0.1",
+      );
       return;
     }
 
@@ -349,7 +433,10 @@ test.describe("clock gallery (ADR 08)", () => {
     expect(Math.round(box.height)).toBe(viewport.height);
   });
 
-  test("the swipe hint shows once, then never again", async ({ page, open }) => {
+  test("the swipe hint shows once, then never again", async ({
+    page,
+    open,
+  }) => {
     await open();
     const hint = page.getByTestId("swipe-hint");
     await expect(hint).toBeVisible();
@@ -359,7 +446,9 @@ test.describe("clock gallery (ADR 08)", () => {
     const box = (await hint.boundingBox())!;
     expect(box.y).toBeLessThan(slot.y + 60);
     // And it is inert, so the gesture it teaches passes straight through it.
-    expect(await hint.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+    expect(
+      await hint.evaluate((el) => getComputedStyle(el).pointerEvents),
+    ).toBe("none");
 
     await page.getByRole("button", { name: "Dismiss tip" }).click();
     await expect(hint).toHaveCount(0);
@@ -369,13 +458,18 @@ test.describe("clock gallery (ADR 08)", () => {
     expect(await readBlob(page)).toMatchObject({ swipeHintDismissed: true });
   });
 
-  test("the scroll arrow points past the fold until the first run", async ({ page, open }) => {
+  test("the scroll arrow points past the fold until the first run", async ({
+    page,
+    open,
+  }) => {
     await open();
     const hint = page.getByTestId("scroll-hint");
 
     if ((page.viewportSize()?.width ?? 0) >= SM_BREAKPOINT) {
       // No page scroll up here (ADR 02's contract), so nothing to point at.
-      expect(await hint.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+      expect(await hint.evaluate((el) => getComputedStyle(el).display)).toBe(
+        "none",
+      );
       return;
     }
 
@@ -386,11 +480,13 @@ test.describe("clock gallery (ADR 08)", () => {
     const box = (await hint.boundingBox())!;
     expect(box.y + box.height).toBeLessThanOrEqual(slot.y + slot.height);
     expect(slot.y + slot.height - (box.y + box.height)).toBeLessThan(60);
-    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(
-      page.viewportSize()!.height,
-    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeGreaterThan(page.viewportSize()!.height);
     // Inert, so the swipe it sits on top of passes straight through.
-    expect(await hint.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+    expect(
+      await hint.evaluate((el) => getComputedStyle(el).pointerEvents),
+    ).toBe("none");
 
     await page.getByRole("button", { name: "Start" }).click();
     await expect(hint).toHaveCount(0);
@@ -402,7 +498,10 @@ test.describe("clock gallery (ADR 08)", () => {
 
   /* ADR 25 — the flip slides. */
 
-  test("a flip mounts a departing layer and settles back to one clock", async ({ page, open }) => {
+  test("a flip mounts a departing layer and settles back to one clock", async ({
+    page,
+    open,
+  }) => {
     await open();
     const slot = page.getByTestId("clock-slot");
     const layers = slot.locator("[data-role]");
@@ -414,12 +513,17 @@ test.describe("clock gallery (ADR 08)", () => {
       "forward",
     );
     // The slide is clock-sized: the departing layer never escapes the slot.
-    expect(await slot.evaluate((el) => getComputedStyle(el).overflowX)).toBe("clip");
+    expect(await slot.evaluate((el) => getComputedStyle(el).overflowX)).toBe(
+      "clip",
+    );
 
     await expect(layers).toHaveCount(1);
   });
 
-  test("a swipe whose release lands outside the slot still flips", async ({ page, open }) => {
+  test("a swipe whose release lands outside the slot still flips", async ({
+    page,
+    open,
+  }) => {
     await open();
     const slot = page.getByTestId("clock-slot");
     const box = (await slot.boundingBox())!;
@@ -440,13 +544,15 @@ test.describe("clock gallery (ADR 08)", () => {
 /* ------------------------------------------------------------------------- */
 
 test.describe("PWA collateral (ADR 04)", () => {
-  test("the manifest and icons are served under /glu with no service worker", async ({
+  test("the manifest and icons are served under /glu, one notification-only worker registered", async ({
     page,
     open,
     request,
     baseURL,
   }) => {
-    const manifestResponse = await request.get(new URL("manifest.webmanifest", baseURL).toString());
+    const manifestResponse = await request.get(
+      new URL("manifest.webmanifest", baseURL).toString(),
+    );
     expect(manifestResponse.status()).toBe(200);
     const manifest = await manifestResponse.json();
     expect(manifest.start_url).toContain("/glu");
@@ -460,8 +566,14 @@ test.describe("PWA collateral (ADR 04)", () => {
     // amendment). Scope is a plain path prefix: `/glu/` does not contain `/glu`.
     const startUrl = new URL(manifest.start_url, baseURL).toString();
     const launch = await request.get(startUrl);
-    expect(launch.status(), `${manifest.start_url} must serve the app directly`).toBe(200);
-    expect(launch.url(), `${manifest.start_url} must not redirect on launch`).toBe(startUrl);
+    expect(
+      launch.status(),
+      `${manifest.start_url} must serve the app directly`,
+    ).toBe(200);
+    expect(
+      launch.url(),
+      `${manifest.start_url} must not redirect on launch`,
+    ).toBe(startUrl);
     const scopePath = new URL(manifest.scope, baseURL).pathname;
     expect(
       new URL(launch.url()).pathname.startsWith(scopePath),
@@ -469,33 +581,48 @@ test.describe("PWA collateral (ADR 04)", () => {
     ).toBe(true);
 
     // Manifest-internal URLs are relative, so they resolve under /glu/ by spec.
-    const purposes = (manifest.icons as { src: string; purpose: string; sizes: string }[]).map(
-      (icon) => `${icon.sizes}:${icon.purpose}`,
-    );
+    const purposes = (
+      manifest.icons as { src: string; purpose: string; sizes: string }[]
+    ).map((icon) => `${icon.sizes}:${icon.purpose}`);
     expect(purposes).toContain("192x192:any");
     expect(purposes).toContain("512x512:any");
     expect(purposes).toContain("512x512:maskable");
 
     for (const icon of manifest.icons as { src: string }[]) {
-      const iconResponse = await request.get(new URL(icon.src, baseURL).toString());
+      const iconResponse = await request.get(
+        new URL(icon.src, baseURL).toString(),
+      );
       expect(iconResponse.status(), icon.src).toBe(200);
     }
 
     await open();
-    // PWA = installable only, NOT offline: no service worker anywhere.
-    const registrations = await page.evaluate(async () =>
-      "serviceWorker" in navigator
-        ? (await navigator.serviceWorker.getRegistrations()).length
-        : 0,
+    // PWA = installable only, NOT offline. The law was "no service worker
+    // anywhere" until ADR 33; now it is exactly one — the notification-only
+    // worker — and "no fetch handler anywhere", asserted on its source below.
+    await expect
+      .poll(async () =>
+        page.evaluate(async () =>
+          "serviceWorker" in navigator
+            ? (await navigator.serviceWorker.getRegistrations()).map(
+                (r) => r.scope,
+              )
+            : [],
+        ),
+      )
+      .toHaveLength(1);
+    const [scope] = await page.evaluate(async () =>
+      (await navigator.serviceWorker.getRegistrations()).map((r) => r.scope),
     );
-    expect(registrations).toBe(0);
+    expect(new URL(scope).pathname).toBe("/glu/");
 
     // Two theme-color variants, emitted from the viewport export.
     const themeColors = await page.evaluate(() =>
-      [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) => ({
-        media: meta.getAttribute("media"),
-        content: meta.getAttribute("content"),
-      })),
+      [...document.querySelectorAll('meta[name="theme-color"]')].map(
+        (meta) => ({
+          media: meta.getAttribute("media"),
+          content: meta.getAttribute("content"),
+        }),
+      ),
     );
     expect(themeColors.length).toBeGreaterThanOrEqual(2);
     expect(themeColors.map((t) => t.media)).toEqual(
@@ -525,10 +652,33 @@ test.describe("PWA collateral (ADR 04)", () => {
     expect(rels).toContain("apple-touch-icon");
 
     for (const { rel, href } of iconLinks) {
-      expect(new URL(href).pathname, `${rel} must carry the basePath`).toContain("/glu/");
+      expect(
+        new URL(href).pathname,
+        `${rel} must carry the basePath`,
+      ).toContain("/glu/");
       const response = await request.get(href);
       expect(response.status(), `${rel} → ${href}`).toBe(200);
     }
+  });
+
+  test("the service worker is notification-only — no fetch handler, ever (ADR 33)", async ({
+    request,
+    baseURL,
+  }) => {
+    // The machine-checkable form of ADR 04's surviving law: installable, not
+    // offline. A fetch listener appearing in this file is offline machinery
+    // arriving without its ADR.
+    const response = await request.get(new URL("sw.js", baseURL).toString());
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("javascript");
+    const source = await response.text();
+    expect(source).toContain("notificationclick");
+    expect(source, "sw.js must never register a fetch handler").not.toMatch(
+      /addEventListener\(\s*["']fetch["']/,
+    );
+    expect(source, "sw.js must never assign an onfetch handler").not.toMatch(
+      /\bonfetch\b/,
+    );
   });
 });
 
@@ -545,7 +695,10 @@ test.describe("wake lock (ADR 17)", () => {
     await page.clock.install();
     await page.addInitScript(() => {
       // The tolerance path: browsers that don't ship it, and battery saver.
-      Reflect.deleteProperty(navigator as unknown as Record<string, unknown>, "wakeLock");
+      Reflect.deleteProperty(
+        navigator as unknown as Record<string, unknown>,
+        "wakeLock",
+      );
     });
 
     await open();
@@ -558,7 +711,11 @@ test.describe("wake lock (ADR 17)", () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test("a rejecting request() changes nothing", async ({ page, open, consoleErrors }) => {
+  test("a rejecting request() changes nothing", async ({
+    page,
+    open,
+    consoleErrors,
+  }) => {
     await page.clock.install();
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "wakeLock", {
@@ -583,13 +740,16 @@ test.describe("session-end alerts (ADR 18)", () => {
   /** Records Notification construction without needing an OS notification. */
   const installRecorder = (page: import("@playwright/test").Page) =>
     page.addInitScript(() => {
-      const recorded: { title: string; tag?: string }[] = [];
-      (window as unknown as { __notifications: typeof recorded }).__notifications = recorded;
+      const recorded: { title: string; tag?: string; via?: "page" | "sw" }[] =
+        [];
+      (
+        window as unknown as { __notifications: typeof recorded }
+      ).__notifications = recorded;
       class RecordingNotification {
         onclick: (() => void) | null = null;
         close() {}
         constructor(title: string, options?: { tag?: string }) {
-          recorded.push({ title, tag: options?.tag });
+          recorded.push({ title, tag: options?.tag, via: "page" });
         }
         static permission = "granted";
         static requestPermission = async () => "granted" as const;
@@ -598,12 +758,38 @@ test.describe("session-end alerts (ADR 18)", () => {
         configurable: true,
         value: RecordingNotification,
       });
+      // ADR 33 made the alert path SW-first, and in real Chromium the worker
+      // does register — the hidden-finish notification now flows through
+      // `registration.showNotification`, not the constructor. Both paths
+      // record into the same ledger, so each spec asserts whichever path the
+      // browser actually took.
+      const registrationProto = (
+        window as unknown as {
+          ServiceWorkerRegistration?: { prototype: Record<string, unknown> };
+        }
+      ).ServiceWorkerRegistration?.prototype;
+      if (registrationProto) {
+        registrationProto.showNotification = async (
+          title: string,
+          options?: { tag?: string },
+        ) => {
+          recorded.push({ title, tag: options?.tag, via: "sw" });
+        };
+        registrationProto.getNotifications = async () => [];
+      }
     });
 
   const recorded = (page: import("@playwright/test").Page) =>
-    page.evaluate(() => (window as unknown as { __notifications: unknown[] }).__notifications);
+    page.evaluate(
+      () =>
+        (window as unknown as { __notifications: unknown[] }).__notifications,
+    );
 
-  test("a visible finish alerts without a notification", async ({ page, open, consoleErrors }) => {
+  test("a visible finish alerts without a notification", async ({
+    page,
+    open,
+    consoleErrors,
+  }) => {
     await page.clock.install();
     await installRecorder(page);
 
@@ -617,7 +803,10 @@ test.describe("session-end alerts (ADR 18)", () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test("a hidden finish posts exactly one tagged notification", async ({ page, open }) => {
+  test("a hidden finish posts exactly one tagged notification", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await installRecorder(page);
     // Emulate a backgrounded tab without losing the page.
@@ -629,15 +818,64 @@ test.describe("session-end alerts (ADR 18)", () => {
     });
 
     await open();
+    // The alert path is SW-first (ADR 33); waiting for the worker to activate
+    // pins which path fires, so `via` below is an assertion, not a coin toss.
+    await expect
+      .poll(() =>
+        page.evaluate(async () =>
+          Boolean(
+            (await navigator.serviceWorker.getRegistration("/glu/"))?.active,
+          ),
+        ),
+      )
+      .toBe(true);
     await page.getByRole("button", { name: "5m", exact: true }).click();
     await page.getByRole("button", { name: "Start" }).click();
     await page.clock.fastForward("05:01");
 
     await expect.poll(() => recorded(page)).toHaveLength(1);
-    expect((await recorded(page))[0]).toMatchObject({ title: "GLU — time's up" });
+    expect((await recorded(page))[0]).toMatchObject({
+      title: "GLU — time’s up",
+      via: "sw",
+    });
   });
 
-  test("stopping and restoring-expired never alert", async ({ page, open, seedStorage }) => {
+  test("without a service worker the hidden finish falls back to the page constructor", async ({
+    page,
+    open,
+    consoleErrors,
+  }) => {
+    await page.clock.install();
+    await installRecorder(page);
+    await page.addInitScript(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      // The accessor lives on the prototype — deleting it there is what
+      // actually removes the API (an instance delete is a silent no-op).
+      Reflect.deleteProperty(Navigator.prototype, "serviceWorker");
+    });
+
+    await open();
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+
+    await expect.poll(() => recorded(page)).toHaveLength(1);
+    expect((await recorded(page))[0]).toMatchObject({
+      title: "GLU — time’s up",
+      tag: "glu-session-end",
+      via: "page",
+    });
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test("stopping and restoring-expired never alert", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     await page.clock.install({ time: new Date("2026-07-24T09:00:00Z") });
     await installRecorder(page);
     await page.addInitScript(() => {
@@ -668,6 +906,394 @@ test.describe("session-end alerts (ADR 18)", () => {
     await page.getByRole("button", { name: "Stop" }).click();
     expect(await recorded(page)).toEqual([]);
   });
+
+  test("the permission ask rides the start gesture, never the pause (ADR 37)", async ({
+    page,
+    open,
+  }) => {
+    await page.clock.install();
+    // Permission still `default`, so the ask is live; count the calls.
+    await page.addInitScript(() => {
+      (window as unknown as { __asks: number }).__asks = 0;
+      class CountingNotification {
+        close() {}
+        static permission = "default";
+        static requestPermission = async () => {
+          (window as unknown as { __asks: number }).__asks += 1;
+          return "default" as const;
+        };
+      }
+      Object.defineProperty(window, "Notification", {
+        configurable: true,
+        value: CountingNotification,
+      });
+    });
+    const asks = () =>
+      page.evaluate(() => (window as unknown as { __asks: number }).__asks);
+
+    await open();
+    expect(await asks()).toBe(0);
+
+    await page.getByRole("button", { name: "Start" }).click();
+    expect(await asks()).toBe(1);
+
+    // The same button, now a Pause: no AudioContext to prime, nothing to ask.
+    await page.getByRole("button", { name: "Pause" }).click();
+    expect(await asks()).toBe(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* ADR 40 — the sound library and how long it plays                           */
+/* ------------------------------------------------------------------------- */
+
+test.describe("alert sounds (ADR 40)", () => {
+  /**
+   * Records what WebAudio was *asked* to play. Headless Chromium has an
+   * AudioContext but no ears, so the ledger of oscillator frequencies and start
+   * times is the only observable the sound has — and the master gain's ramp to
+   * zero is the observable for stopping one.
+   */
+  const installAudioRecorder = (page: import("@playwright/test").Page) =>
+    page.addInitScript(() => {
+      type Tone = { frequency: number; at: number };
+      const tones: Tone[] = [];
+      const state = { tones, stops: 0 };
+      (window as unknown as { __audio: typeof state }).__audio = state;
+
+      class RecordingContext {
+        state = "running";
+        currentTime = 0;
+        destination = { id: "destination" };
+        resume() {
+          return Promise.resolve();
+        }
+        createOscillator() {
+          const tone: Tone = { frequency: 0, at: -1 };
+          return {
+            type: "sine",
+            frequency: {
+              get value() {
+                return tone.frequency;
+              },
+              set value(hz: number) {
+                tone.frequency = hz;
+              },
+            },
+            connect: (next: unknown) => next,
+            start: (at: number) => {
+              tone.at = at;
+              tones.push(tone);
+            },
+            stop: () => {},
+          };
+        }
+        createGain() {
+          return {
+            gain: {
+              value: 1,
+              setValueAtTime: () => {},
+              exponentialRampToValueAtTime: () => {},
+              linearRampToValueAtTime: (target: number) => {
+                if (target === 0) state.stops += 1;
+              },
+              cancelScheduledValues: () => {},
+            },
+            connect: (next: unknown) => next,
+          };
+        }
+      }
+
+      for (const key of ["AudioContext", "webkitAudioContext"]) {
+        Object.defineProperty(window, key, {
+          configurable: true,
+          value: RecordingContext,
+        });
+      }
+    });
+
+  const audio = (page: import("@playwright/test").Page) =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __audio: {
+              tones: { frequency: number; at: number }[];
+              stops: number;
+            };
+          }
+        ).__audio,
+    );
+
+  const clearAudio = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => {
+      const state = (
+        window as unknown as { __audio: { tones: unknown[]; stops: number } }
+      ).__audio;
+      state.tones.length = 0;
+      state.stops = 0;
+    });
+
+  const openSettings = async (page: import("@playwright/test").Page) => {
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Settings").click();
+    await expect(
+      page.getByRole("button", { name: "Close settings" }),
+    ).toBeVisible();
+    return page.getByRole("dialog").last();
+  };
+
+  test("the chosen sound and length are what a finish plays", async ({
+    page,
+    open,
+  }) => {
+    await page.clock.install();
+    await installAudioRecorder(page);
+    await open();
+
+    const settings = await openSettings(page);
+    // Choosing is hearing: the tap that selects Wood also plays it.
+    await settings.getByRole("radio", { name: "Wood" }).click();
+    await expect
+      .poll(async () => (await audio(page)).tones.map((t) => t.frequency))
+      .toEqual([880, 1320]);
+
+    await clearAudio(page);
+    // Mantine's rungs are transparent inputs under labels — the label is the
+    // clickable surface (the ADR 28 precedent).
+    await settings
+      .getByTestId("setting-alert-duration")
+      .getByText("5 s", { exact: true })
+      .click();
+    // Wood's period is one second, so five seconds is five repeats of two hits.
+    await expect.poll(async () => (await audio(page)).tones.length).toBe(10);
+
+    await page.getByRole("button", { name: "Close settings" }).click();
+    // One Escape closes the drawer behind it, or its overlay eats every click
+    // meant for the timer.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await clearAudio(page);
+
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+    await expect(page.getByTestId("clock-slot")).toContainText("00:00");
+
+    const played = await audio(page);
+    expect(played.tones).toHaveLength(10);
+    expect(new Set(played.tones.map((t) => t.frequency))).toEqual(
+      new Set([880, 1320]),
+    );
+    // Five starts, one second apart — the repeats the rung asked for.
+    expect(
+      played.tones
+        .filter((t) => t.frequency === 880)
+        .map((t) => Math.round(t.at)),
+    ).toEqual([0, 1, 2, 3, 4]);
+
+    // Both fields ride the additive-blob pattern: same key, no version bump.
+    const blob = await readBlob(page);
+    expect(blob).toMatchObject({
+      alertSoundId: "wood",
+      alertDurationSeconds: 5,
+    });
+  });
+
+  test("the defaults are ADR 18's chime, once", async ({ page, open }) => {
+    await page.clock.install();
+    await installAudioRecorder(page);
+    await open();
+
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+
+    const played = await audio(page);
+    expect(played.tones.map((t) => t.frequency)).toEqual([660, 990]);
+  });
+
+  test("a transport press cuts a long alert short", async ({ page, open }) => {
+    await page.clock.install();
+    await installAudioRecorder(page);
+    await open();
+
+    const settings = await openSettings(page);
+    await settings
+      .getByTestId("setting-alert-duration")
+      .getByText("20 s", { exact: true })
+      .click();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    // One Escape closes the drawer behind it, or its overlay eats every click
+    // meant for the timer.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await clearAudio(page);
+
+    await page.getByRole("button", { name: "5m", exact: true }).click();
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.clock.fastForward("05:01");
+    await expect
+      .poll(async () => (await audio(page)).tones.length)
+      .toBeGreaterThan(2);
+
+    // Pressing a transport control is the acknowledgment — the sound stops.
+    // The key rather than the button: at 00:00 ADR 21's takeover is sitting
+    // over the transport row, and the hotkey hook is the second edge the stop
+    // is wired at anyway.
+    await page.keyboard.press("s");
+    await expect.poll(async () => (await audio(page)).stops).toBeGreaterThan(0);
+  });
+
+  test("leaving Settings stops a preview in flight", async ({ page, open }) => {
+    await page.clock.install();
+    await installAudioRecorder(page);
+    await open();
+
+    const settings = await openSettings(page);
+    await settings
+      .getByTestId("setting-alert-duration")
+      .getByText("20 s", { exact: true })
+      .click();
+    await settings.getByRole("radio", { name: "Deep" }).click();
+    await clearAudio(page);
+
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect.poll(async () => (await audio(page)).stops).toBeGreaterThan(0);
+  });
+
+  /* ADR 41 — how many times GLU may raise the prompt by itself, and the door
+     that stays open once it may not. A real permission dialog is not
+     automatable, so the observable is a recorder standing in for the browser:
+     it counts the asks and answers every one of them the way a *dismissal*
+     does — by leaving the permission at `default`, which is the exact case
+     ADR 18's "asked once" guard never covered. */
+  const installPermissionRecorder = (page: import("@playwright/test").Page) =>
+    page.addInitScript(() => {
+      const state = { asks: 0 };
+      (window as unknown as { __permission: typeof state }).__permission =
+        state;
+      Object.defineProperty(window, "Notification", {
+        configurable: true,
+        value: {
+          get permission() {
+            return "default";
+          },
+          requestPermission: () => {
+            state.asks += 1;
+            // Never resolves — a real prompt sits there until the user deals
+            // with it, and ADR 18's rule is that the timer does not wait for
+            // them. A promise that resolves instantly would hide a regression
+            // that made the Start gesture await this.
+            return new Promise<NotificationPermission>(() => {});
+          },
+        },
+      });
+    });
+
+  const asks = (page: import("@playwright/test").Page) =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __permission: { asks: number } }).__permission
+          .asks,
+    );
+
+  test("asks three times, then only Settings can (ADR 41)", async ({
+    page,
+    open,
+  }) => {
+    await installPermissionRecorder(page);
+    await open();
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.getByRole("button", { name: "Start" }).click();
+      // The prompt is still open (the stub never answers) and the run is
+      // already going: ADR 18's un-awaited ask, re-verified under the budget.
+      await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+      await page.getByRole("button", { name: "Stop" }).click();
+    }
+
+    // Five Starts, three asks: before this ADR it was five.
+    await expect.poll(() => asks(page)).toBe(3);
+    expect(await readBlob(page)).toMatchObject({ alertPromptsUsed: 3 });
+
+    const settings = await openSettings(page);
+    await settings.getByTestId("setting-notify-on-end").click();
+
+    // The door still opens with the budget spent — and costs nothing.
+    await expect.poll(() => asks(page)).toBe(4);
+    expect(await readBlob(page)).toMatchObject({ alertPromptsUsed: 3 });
+  });
+
+  test("the row repaints live when the browser flips the permission (ADR 41)", async ({
+    page,
+    open,
+    context,
+    baseURL,
+    browserName,
+  }) => {
+    // Playwright cannot flip a WebKit permission mid-page (the change event
+    // never fires — probed, not assumed). WebKit users are covered by the
+    // remount floor: Settings mounts on open and reads fresh.
+    test.skip(browserName === "webkit", "no live permission flips in WebKit");
+
+    // Headless Chromium hard-codes `Notification.permission` to "denied"
+    // whatever the context granted, while `permissions.query` tracks the real
+    // grant and fires real `change` events. The shim makes the static read
+    // mirror the query state, so the row sees what a headed browser shows —
+    // everything this test exercises (the browser's change event, the hook's
+    // subscription, the repaint) stays real.
+    await page.addInitScript(() => {
+      let current: NotificationPermission = "default";
+      // The app must share the shim's PermissionStatus object: listeners on
+      // one EventTarget fire in registration order, so the shim's sync (added
+      // at resolve, long before Settings opens) always updates `current`
+      // before the app's own change listener re-reads it. Separate status
+      // objects have no such ordering — probed: the app's fired first and the
+      // repaint read a stale value.
+      const realQuery = navigator.permissions.query.bind(navigator.permissions);
+      let shared: Promise<PermissionStatus> | null = null;
+      navigator.permissions.query = (descriptor: PermissionDescriptor) => {
+        if (descriptor?.name !== ("notifications" as PermissionName))
+          return realQuery(descriptor);
+        shared ??= realQuery(descriptor).then((status) => {
+          const sync = () => {
+            current = status.state === "prompt" ? "default" : status.state;
+          };
+          sync();
+          status.addEventListener("change", sync);
+          return status;
+        });
+        return shared;
+      };
+      class LiveNotification {
+        static get permission() {
+          return current;
+        }
+        static requestPermission = async () => current;
+      }
+      Object.defineProperty(window, "Notification", {
+        configurable: true,
+        value: LiveNotification,
+      });
+    });
+
+    await open();
+    const settings = await openSettings(page);
+    const toggle = settings.getByTestId("setting-notify-on-end");
+    await expect(toggle).not.toBeChecked();
+
+    // The browser's site-settings toggle, flipped while Settings stays open:
+    // the switch must follow it on with no remount and no tap.
+    await context.grantPermissions(["notifications"], {
+      origin: new URL(baseURL!).origin,
+    });
+    await expect(toggle).toBeChecked();
+
+    // And back: revoking turns it off again, live.
+    await context.clearPermissions();
+    await expect(toggle).not.toBeChecked();
+  });
 });
 
 /* ------------------------------------------------------------------------- */
@@ -675,18 +1301,28 @@ test.describe("session-end alerts (ADR 18)", () => {
 /* ------------------------------------------------------------------------- */
 
 test.describe("header drawer (ADR 10)", () => {
-  test("is hidden by default and the arrow is the only new chrome", async ({ page, open }) => {
+  test("is hidden by default and the arrow is the only new chrome", async ({
+    page,
+    open,
+  }) => {
     await open();
-    await expect(page.getByRole("button", { name: "Open header" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open header" }),
+    ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     // The relocated theme control exists nowhere else.
-    await expect(page.getByRole("button", { name: /Switch to (light|dark) theme/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /Switch to (light|dark) theme/ }),
+    ).toHaveCount(0);
   });
 
   // ADR 10 said "exactly three entries"; ADR 26 amended it to three *action
   // rows* plus a legal footer, and ADR 29 added a fourth row (Docs). The footer
   // and the Docs modal are asserted in their own blocks below.
-  test("opens with exactly four action rows, GitHub linked safely", async ({ page, open }) => {
+  test("opens with exactly four action rows, GitHub linked safely", async ({
+    page,
+    open,
+  }) => {
     await open();
     await page.getByRole("button", { name: "Open header" }).click();
 
@@ -694,7 +1330,10 @@ test.describe("header drawer (ADR 10)", () => {
     await expect(drawer).toBeVisible();
 
     const github = drawer.getByRole("link", { name: /GitHub/ });
-    await expect(github).toHaveAttribute("href", "https://github.com/ioandev/glu");
+    await expect(github).toHaveAttribute(
+      "href",
+      "https://github.com/ioandev/glu",
+    );
     await expect(github).toHaveAttribute("target", "_blank");
     await expect(github).toHaveAttribute("rel", "noopener noreferrer");
     await expect(drawer.getByText("Appearance")).toBeVisible();
@@ -707,16 +1346,23 @@ test.describe("header drawer (ADR 10)", () => {
     open,
   }) => {
     await open();
-    const before = await page.locator("html").getAttribute("data-mantine-color-scheme");
+    const before = await page
+      .locator("html")
+      .getAttribute("data-mantine-color-scheme");
 
     await page.getByRole("button", { name: "Open header" }).click();
     await page.getByRole("dialog").getByText("Appearance").click();
 
-    const after = await page.locator("html").getAttribute("data-mantine-color-scheme");
+    const after = await page
+      .locator("html")
+      .getAttribute("data-mantine-color-scheme");
     expect(after).not.toBe(before);
 
     await page.reload({ waitUntil: "load" });
-    await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", after!);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-mantine-color-scheme",
+      after!,
+    );
     // Hidden by default means every load, including this one.
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
@@ -726,9 +1372,13 @@ test.describe("header drawer (ADR 10)", () => {
     await page.getByRole("button", { name: "Open header" }).click();
     await page.getByRole("dialog").getByText("Settings").click();
 
-    await expect(page.getByRole("button", { name: "Close settings" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Close settings" }),
+    ).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Close settings" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Close settings" }),
+    ).toHaveCount(0);
   });
 
   test("a running timer keeps counting with the drawer open, hotkeys included", async ({
@@ -747,7 +1397,9 @@ test.describe("header drawer (ADR 10)", () => {
     // ADR 06's keys still act on the timer with chrome open — a feature.
     await page.getByRole("button", { name: "Open header" }).click();
     await page.keyboard.press("p");
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("paused");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("paused");
   });
 });
 
@@ -768,7 +1420,10 @@ test.describe("Todoist auth (ADR 11)", () => {
       route.fulfill({ json: body }),
     );
 
-  test("shows only the login button when logged out", async ({ page, open }) => {
+  test("shows only the login button when logged out", async ({
+    page,
+    open,
+  }) => {
     await stubStatus(page, { authenticated: false });
     await open();
 
@@ -788,13 +1443,19 @@ test.describe("Todoist auth (ADR 11)", () => {
     // With an empty `backend/.env` the real server answers exactly this.
     await stubStatus(page, { authenticated: false });
     await open();
-    await expect(page.getByRole("link", { name: /Log in with Todoist/ })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Log in with Todoist/ }),
+    ).toBeVisible();
 
     // And with no API process at all.
     await page.unrouteAll();
-    await page.route("**/glu/api/auth/todoist/status", (route) => route.abort());
+    await page.route("**/glu/api/auth/todoist/status", (route) =>
+      route.abort(),
+    );
     await page.reload({ waitUntil: "load" });
-    await expect(page.getByRole("link", { name: /Log in with Todoist/ })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Log in with Todoist/ }),
+    ).toBeVisible();
     // A missing Todoist app is a clean logged-out state, never an error screen.
     expect(consoleErrors).toEqual([]);
   });
@@ -810,10 +1471,15 @@ test.describe("Todoist auth (ADR 11)", () => {
     await expect(chip).toBeVisible();
     await chip.click();
     await page.getByRole("button", { name: "Log out" }).click();
-    await expect(page.getByRole("link", { name: /Log in with Todoist/ })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Log in with Todoist/ }),
+    ).toBeVisible();
   });
 
-  test("no token material is readable from the page", async ({ page, open }) => {
+  test("no token material is readable from the page", async ({
+    page,
+    open,
+  }) => {
     await stubStatus(page, { authenticated: true, name: "Ioan", id: "42" });
     await open();
     const leaked = await page.evaluate(() => ({
@@ -830,13 +1496,20 @@ test.describe("Todoist auth (ADR 11)", () => {
 /* ------------------------------------------------------------------------- */
 
 test.describe("settings (ADR 19)", () => {
-  const stubStatus = (page: import("@playwright/test").Page, body: Record<string, unknown>) =>
-    page.route("**/glu/api/auth/todoist/status", (route) => route.fulfill({ json: body }));
+  const stubStatus = (
+    page: import("@playwright/test").Page,
+    body: Record<string, unknown>,
+  ) =>
+    page.route("**/glu/api/auth/todoist/status", (route) =>
+      route.fulfill({ json: body }),
+    );
 
   const openSettings = async (page: import("@playwright/test").Page) => {
     await page.getByRole("button", { name: "Open header" }).click();
     await page.getByRole("dialog").getByText("Settings").click();
-    await expect(page.getByRole("button", { name: "Close settings" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Close settings" }),
+    ).toBeVisible();
   };
 
   test("logging out in Settings flips the top-right area without a reload", async ({
@@ -848,18 +1521,26 @@ test.describe("settings (ADR 19)", () => {
       route.fulfill({ json: { authenticated: false } }),
     );
     await open();
-    await expect(page.getByRole("button", { name: "Todoist account: Ioan" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Todoist account: Ioan" }),
+    ).toBeVisible();
 
     await openSettings(page);
     await page.getByRole("button", { name: "Log out" }).click();
 
     // The top-right region flips…
     await expect(
-      page.getByLabel("Todoist area").getByRole("link", { name: /Log in with Todoist/ }),
+      page
+        .getByLabel("Todoist area")
+        .getByRole("link", { name: /Log in with Todoist/ }),
     ).toBeVisible();
     // …and the modal stays open, now showing the branded login.
-    await expect(page.getByRole("button", { name: "Close settings" })).toBeVisible();
-    await expect(page.getByLabel("Todoist settings").getByRole("link")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Close settings" }),
+    ).toBeVisible();
+    await expect(
+      page.getByLabel("Todoist settings").getByRole("link"),
+    ).toBeVisible();
   });
 
   test("the Settings login is the same branded control and the same URL", async ({
@@ -871,7 +1552,10 @@ test.describe("settings (ADR 19)", () => {
     await openSettings(page);
 
     const settingsLogin = page.getByLabel("Todoist settings").getByRole("link");
-    await expect(settingsLogin).toHaveAttribute("href", "/glu/api/auth/todoist/login");
+    await expect(settingsLogin).toHaveAttribute(
+      "href",
+      "/glu/api/auth/todoist/login",
+    );
     await expect(settingsLogin).toHaveText(/Log in with Todoist/);
   });
 
@@ -883,7 +1567,9 @@ test.describe("settings (ADR 19)", () => {
     await open();
     await openSettings(page);
 
-    const always = page.getByRole("switch", { name: "Stay awake on the website" });
+    const always = page.getByRole("switch", {
+      name: "Stay awake on the website",
+    });
     const whileRunning = page.getByRole("switch", {
       name: "Stay awake when the timer is running",
     });
@@ -913,7 +1599,9 @@ test.describe("settings (ADR 19)", () => {
     await openSettings(page);
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(
-      page.getByLabel("Todoist area").getByRole("link", { name: /Log in with Todoist/ }),
+      page
+        .getByLabel("Todoist area")
+        .getByRole("link", { name: /Log in with Todoist/ }),
     ).toBeVisible();
 
     const after = await readBlob(page);
@@ -942,7 +1630,9 @@ test.describe("task view (ADR 12)", () => {
         route.fulfill({ json: { items: [{ id: "l1", name: "deep-work" }] } }),
       ),
       page.route("**/glu/api/todoist/filters", (route) =>
-        route.fulfill({ json: { items: [{ id: "f1", name: "Today", query: "today" }] } }),
+        route.fulfill({
+          json: { items: [{ id: "f1", name: "Today", query: "today" }] },
+        }),
       ),
       page.route("**/glu/api/todoist/sections**", (route) =>
         route.fulfill({
@@ -957,7 +1647,9 @@ test.describe("task view (ADR 12)", () => {
     ]);
 
   const stubTasks = (page: Page, body: unknown) =>
-    page.route("**/glu/api/todoist/tasks**", (route) => route.fulfill({ json: body }));
+    page.route("**/glu/api/todoist/tasks**", (route) =>
+      route.fulfill({ json: body }),
+    );
 
   test("logged out shows only the login button — no tools icon, no list", async ({
     page,
@@ -968,8 +1660,12 @@ test.describe("task view (ADR 12)", () => {
     );
     await open();
 
-    await expect(page.getByRole("link", { name: /Log in with Todoist/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Choose task source" })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /Log in with Todoist/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Choose task source" }),
+    ).toHaveCount(0);
     await expect(page.getByTestId("task-hint")).toHaveCount(0);
   });
 
@@ -981,9 +1677,30 @@ test.describe("task view (ADR 12)", () => {
     await stubLists(page);
     await stubTasks(page, {
       items: [
-        { id: "3", title: "Someday", description: "", uiPriority: 4, sectionId: "s2", order: 0 },
-        { id: "2", title: "Today task", description: "", uiPriority: 1, sectionId: "s1", order: 0 },
-        { id: "1", title: "Loose task", description: "keeps its line", uiPriority: 3, sectionId: null, order: 0 },
+        {
+          id: "3",
+          title: "Someday",
+          description: "",
+          uiPriority: 4,
+          sectionId: "s2",
+          order: 0,
+        },
+        {
+          id: "2",
+          title: "Today task",
+          description: "",
+          uiPriority: 1,
+          sectionId: "s1",
+          order: 0,
+        },
+        {
+          id: "1",
+          title: "Loose task",
+          description: "keeps its line",
+          uiPriority: 3,
+          sectionId: null,
+          order: 0,
+        },
       ],
       truncated: false,
       cap: 200,
@@ -1004,18 +1721,30 @@ test.describe("task view (ADR 12)", () => {
 
     await page.reload({ waitUntil: "load" });
     await expect(page.getByTestId("task-card")).toHaveCount(3);
-    await expect.poll(async () => (await readBlob(page))?.todoistSource?.id).toBe("p1");
+    await expect
+      .poll(async () => (await readBlob(page))?.todoistSource?.id)
+      .toBe("p1");
   });
 
   /** ADR 12 amendment: below `sm` the popover is a modal that owns the screen. */
-  test("below sm the source picker opens as a near-full-screen modal", async ({ page, open }) => {
+  test("below sm the source picker opens as a near-full-screen modal", async ({
+    page,
+    open,
+  }) => {
     const viewport = { width: 590, height: 900 };
     await page.setViewportSize(viewport);
     await loginAs(page);
     await stubLists(page);
     await stubTasks(page, {
       items: [
-        { id: "1", title: "Loose task", description: "", uiPriority: 3, sectionId: null, order: 0 },
+        {
+          id: "1",
+          title: "Loose task",
+          description: "",
+          uiPriority: 3,
+          sectionId: null,
+          order: 0,
+        },
       ],
       truncated: false,
       cap: 200,
@@ -1058,13 +1787,24 @@ test.describe("task view (ADR 12)", () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
       return route.fulfill({
         json: {
-          items: [{ id: "1", title, description: "", uiPriority: 4, sectionId: null, order: 0 }],
+          items: [
+            {
+              id: "1",
+              title,
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 0,
+            },
+          ],
           truncated: false,
           cap: 200,
         },
       });
     });
-    await seedStorage(seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }));
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+    );
     await open();
 
     await expect(page.getByText("Before refresh")).toBeVisible();
@@ -1073,15 +1813,234 @@ test.describe("task view (ADR 12)", () => {
     await page.getByRole("button", { name: "Refresh tasks" }).click();
 
     // In flight: the rendered list stays put and the control reports busy.
-    await expect(page.getByTestId("task-refresh")).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByTestId("task-refresh")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
     await expect(page.getByTestId("task-skeletons")).toHaveCount(0);
     await expect(page.getByText("Before refresh")).toBeVisible();
 
     await expect(page.getByText("After refresh")).toBeVisible();
-    await expect(page.getByTestId("task-refresh")).toHaveAttribute("aria-busy", "false");
+    await expect(page.getByTestId("task-refresh")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
   });
 
-  test("the 200-task cap is visible, not silent", async ({ page, open, seedStorage }) => {
+  /* ----------------------------------------------------------------------- */
+  /* ADR 43 — pull to refresh                                                 */
+  /* ----------------------------------------------------------------------- */
+
+  /**
+   * Playwright's touchscreen taps but does not drag, so the gesture is driven
+   * by dispatching real `PointerEvent`s at the host — which is what a finger
+   * produces anyway, and keeps the test running on all four projects rather
+   * than only the two with `hasTouch`.
+   */
+  const pointerAt = (
+    page: Page,
+    type: string,
+    y: number,
+    pointerType = "touch",
+  ) =>
+    page.evaluate(
+      ([type, y, pointerType]) => {
+        const host = document.querySelector('[data-testid="pull-host"]');
+        if (!host) throw new Error("no pull host");
+        const box = host.getBoundingClientRect();
+        host.dispatchEvent(
+          new PointerEvent(type as string, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            isPrimary: true,
+            pointerType: pointerType as string,
+            clientX: box.left + box.width / 2,
+            clientY: box.top + (y as number),
+          }),
+        );
+      },
+      [type, y, pointerType] as const,
+    );
+
+  test("pulling the list down refreshes it, and the icon rides the finger", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    await loginAs(page);
+    await stubLists(page);
+
+    let title = "Before pull";
+    await page.route("**/glu/api/todoist/tasks**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              id: "1",
+              title,
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 0,
+            },
+          ],
+          truncated: false,
+          cap: 200,
+        },
+      });
+    });
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+    );
+    await open();
+
+    await expect(page.getByText("Before pull")).toBeVisible();
+    const indicator = page.getByTestId("pull-indicator");
+    // At rest it is above the top edge and invisible.
+    await expect(indicator).toHaveCSS("opacity", "0");
+
+    title = "After pull";
+    await pointerAt(page, "pointerdown", 0);
+    await pointerAt(page, "pointermove", 40);
+    // Tracking, but a release here would do nothing — and it looks like it.
+    await expect(indicator).not.toHaveAttribute("data-armed", "true");
+
+    await pointerAt(page, "pointermove", 200);
+    await expect(indicator).toHaveAttribute("data-armed", "true");
+    await expect(indicator).toHaveCSS("opacity", "1");
+
+    await pointerAt(page, "pointerup", 200);
+
+    // In flight: same contract as the button — list stays put, no skeletons.
+    await expect(indicator).toHaveAttribute("data-spinning", "true");
+    await expect(page.getByTestId("task-refresh")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(page.getByTestId("task-skeletons")).toHaveCount(0);
+    await expect(page.getByText("Before pull")).toBeVisible();
+
+    await expect(page.getByText("After pull")).toBeVisible();
+    // …and then it goes back up and hides itself.
+    await expect(indicator).not.toHaveAttribute("data-spinning", "true");
+    await expect(indicator).toHaveCSS("opacity", "0");
+  });
+
+  test("a short pull refetches nothing, and a mouse drag never pulls at all", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    await loginAs(page);
+    await stubLists(page);
+
+    let requests = 0;
+    await page.route("**/glu/api/todoist/tasks**", (route) => {
+      requests += 1;
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              id: "1",
+              title: "Only task",
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 0,
+            },
+          ],
+          truncated: false,
+          cap: 200,
+        },
+      });
+    });
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+    );
+    await open();
+    await expect(page.getByText("Only task")).toBeVisible();
+    const indicator = page.getByTestId("pull-indicator");
+
+    const before = requests;
+    // Released short of the line: visible, then gone, and nothing fetched.
+    await pointerAt(page, "pointerdown", 0);
+    await pointerAt(page, "pointermove", 60);
+    await expect(indicator).not.toHaveAttribute("data-armed", "true");
+    await pointerAt(page, "pointerup", 60);
+    await expect(indicator).toHaveCSS("opacity", "0");
+
+    // A mouse has the header button; the gesture is touch only.
+    await pointerAt(page, "pointerdown", 0, "mouse");
+    await pointerAt(page, "pointermove", 200, "mouse");
+    await pointerAt(page, "pointerup", 200, "mouse");
+    await expect(indicator).toHaveCSS("opacity", "0");
+
+    expect(requests).toBe(before);
+  });
+
+  test.describe("with reduced motion", () => {
+    test("still refreshes — it just does not spin or slide", async ({
+      page,
+      open,
+      seedStorage,
+    }) => {
+      // `emulateMedia`, not the `reducedMotion` context option: the latter is
+      // not honoured against this suite's already-created context.
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await loginAs(page);
+      await stubLists(page);
+
+      let title = "Before pull";
+      await page.route("**/glu/api/todoist/tasks**", async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return route.fulfill({
+          json: {
+            items: [
+              {
+                id: "1",
+                title,
+                description: "",
+                uiPriority: 4,
+                sectionId: null,
+                order: 0,
+              },
+            ],
+            truncated: false,
+            cap: 200,
+          },
+        });
+      });
+      await seedStorage(
+        seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+      );
+      await open();
+      await expect(page.getByText("Before pull")).toBeVisible();
+
+      title = "After pull";
+      await pointerAt(page, "pointerdown", 0);
+      await pointerAt(page, "pointermove", 200);
+      await pointerAt(page, "pointerup", 200);
+
+      const indicator = page.getByTestId("pull-indicator");
+      await expect(indicator).toHaveAttribute("data-spinning", "true");
+      await expect(indicator).toHaveCSS("transition-property", "none");
+      await expect(indicator.locator("svg")).toHaveCSS(
+        "animation-name",
+        "none",
+      );
+
+      // The refresh itself is not motion, and still happens.
+      await expect(page.getByText("After pull")).toBeVisible();
+    });
+  });
+
+  test("the 200-task cap is visible, not silent", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     await loginAs(page);
     await stubLists(page);
     await stubTasks(page, {
@@ -1096,19 +2055,29 @@ test.describe("task view (ADR 12)", () => {
       truncated: true,
       cap: 200,
     });
-    await seedStorage(seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }));
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+    );
     await open();
 
-    await expect(page.getByTestId("task-truncation")).toHaveText("Showing first 200");
+    await expect(page.getByTestId("task-truncation")).toHaveText(
+      "Showing first 200",
+    );
   });
 
-  test("a source deleted upstream degrades to the hint", async ({ page, open, seedStorage }) => {
+  test("a source deleted upstream degrades to the hint", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     await loginAs(page);
     await stubLists(page);
     await page.route("**/glu/api/todoist/tasks**", (route) =>
       route.fulfill({ status: 404, json: { error: "not_found" } }),
     );
-    await seedStorage(seed({ todoistSource: { type: "project", id: "gone", name: "Deleted" } }));
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "gone", name: "Deleted" } }),
+    );
     await open();
 
     await expect(page.getByTestId("task-hint")).toBeVisible();
@@ -1120,7 +2089,10 @@ test.describe("task view (ADR 12)", () => {
     open,
     seedStorage,
   }, testInfo) => {
-    test.skip(testInfo.project.name.includes("half-tablet"), "tablet-only contract");
+    test.skip(
+      testInfo.project.name.includes("half-tablet"),
+      "tablet-only contract",
+    );
 
     await loginAs(page);
     await stubLists(page);
@@ -1136,7 +2108,9 @@ test.describe("task view (ADR 12)", () => {
       truncated: false,
       cap: 200,
     });
-    await seedStorage(seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }));
+    await seedStorage(
+      seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } }),
+    );
     await open();
 
     await expect(page.getByTestId("task-list")).toBeVisible();
@@ -1168,7 +2142,14 @@ test.describe("task view (ADR 12)", () => {
         return route.fulfill({
           json: {
             items: [
-              { id: "big", title: "Slow project task", description: "", uiPriority: 4, sectionId: null, order: 0 },
+              {
+                id: "big",
+                title: "Slow project task",
+                description: "",
+                uiPriority: 4,
+                sectionId: null,
+                order: 0,
+              },
             ],
             truncated: false,
             cap: 200,
@@ -1178,7 +2159,14 @@ test.describe("task view (ADR 12)", () => {
       return route.fulfill({
         json: {
           items: [
-            { id: "small", title: "Fast label task", description: "", uiPriority: 4, sectionId: null, order: 0 },
+            {
+              id: "small",
+              title: "Fast label task",
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 0,
+            },
           ],
           truncated: false,
           cap: 200,
@@ -1215,7 +2203,10 @@ test.describe("task detail (ADR 13)", () => {
     "base64",
   );
 
-  const stubEverything = async (page: Page, overrides: { taskStatus?: number } = {}) => {
+  const stubEverything = async (
+    page: Page,
+    overrides: { taskStatus?: number } = {},
+  ) => {
     await page.route("**/glu/api/auth/todoist/status", (route) =>
       route.fulfill({ json: { authenticated: true, name: "Ioan", id: "42" } }),
     );
@@ -1286,7 +2277,10 @@ test.describe("task detail (ADR 13)", () => {
   };
 
   const withSource = (patch: Record<string, unknown> = {}) =>
-    seed({ todoistSource: { type: "project", id: "p1", name: "GLU" }, ...patch });
+    seed({
+      todoistSource: { type: "project", id: "p1", name: "GLU" },
+      ...patch,
+    });
 
   test("opens from a card and shows the task, read-only", async ({
     page,
@@ -1297,17 +2291,27 @@ test.describe("task detail (ADR 13)", () => {
     await seedStorage(withSource());
     await open();
 
-    await page.getByRole("button", { name: /Open “Fix the palette flash”/ }).click();
+    await page
+      .getByRole("button", { name: /Open “Fix the palette flash”/ })
+      .click();
     await expect(page.getByTestId("task-detail")).toBeVisible();
-    await expect(page.getByTestId("detail-description")).toContainText("Second line.");
+    await expect(page.getByTestId("detail-description")).toContainText(
+      "Second line.",
+    );
     await expect(page.getByTestId("comment")).toHaveCount(1);
 
     // ADR 13 shipped read-only; ADR 20 added exactly one write action here —
     // the priority circle. Nothing else in the detail mutates anything.
-    await expect(page.getByRole("button", { name: /Edit|Delete|Reschedule/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /Edit|Delete|Reschedule/ }),
+    ).toHaveCount(0);
   });
 
-  test("every byte of a comment image is same-origin", async ({ page, open, seedStorage }) => {
+  test("every byte of a comment image is same-origin", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     const external: string[] = [];
     page.on("request", (request) => {
       const host = new URL(request.url()).hostname;
@@ -1317,11 +2321,16 @@ test.describe("task detail (ADR 13)", () => {
     await stubEverything(page);
     await seedStorage(withSource());
     await open();
-    await page.getByRole("button", { name: /Open “Fix the palette flash”/ }).click();
+    await page
+      .getByRole("button", { name: /Open “Fix the palette flash”/ })
+      .click();
 
     const image = page.getByTestId("comment-image");
     await expect(image).toBeVisible();
-    await expect(image).toHaveAttribute("src", /^\/glu\/api\/todoist\/attachment/);
+    await expect(image).toHaveAttribute(
+      "src",
+      /^\/glu\/api\/todoist\/attachment/,
+    );
     expect(external).toEqual([]);
   });
 
@@ -1334,9 +2343,14 @@ test.describe("task detail (ADR 13)", () => {
     await seedStorage(withSource());
     await open();
 
-    await page.getByRole("button", { name: /Open “Fix the palette flash”/ }).click();
+    await page
+      .getByRole("button", { name: /Open “Fix the palette flash”/ })
+      .click();
     await expect(page.getByTestId("detail-gone")).toBeVisible();
-    await page.getByTestId("detail-gone").getByRole("button", { name: "Close" }).click();
+    await page
+      .getByTestId("detail-gone")
+      .getByRole("button", { name: "Close" })
+      .click();
     await expect(page.getByTestId("detail-gone")).toHaveCount(0);
   });
 
@@ -1351,7 +2365,9 @@ test.describe("task detail (ADR 13)", () => {
     await open();
 
     await page.getByRole("button", { name: "Start" }).click();
-    await page.getByRole("button", { name: /Open “Fix the palette flash”/ }).click();
+    await page
+      .getByRole("button", { name: /Open “Fix the palette flash”/ })
+      .click();
     await expect(page.getByTestId("task-detail")).toBeVisible();
 
     await page.clock.fastForward("01:00");
@@ -1370,7 +2386,10 @@ test.describe("task detail (ADR 13)", () => {
 type Box = { x: number; y: number; width: number; height: number };
 
 const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  a.x < b.x + b.width &&
+  a.x + a.width > b.x &&
+  a.y < b.y + b.height &&
+  a.y + a.height > b.y;
 
 test.describe("focused task time comments (ADR 14)", () => {
   type Page = import("@playwright/test").Page;
@@ -1398,7 +2417,14 @@ test.describe("focused task time comments (ADR 14)", () => {
               sectionId: null,
               order: 0,
             },
-            { id: "t2", title: "Other task", description: "", uiPriority: 4, sectionId: null, order: 1 },
+            {
+              id: "t2",
+              title: "Other task",
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 1,
+            },
           ],
           truncated: false,
           cap: 200,
@@ -1407,7 +2433,9 @@ test.describe("focused task time comments (ADR 14)", () => {
     );
     let minutes = 0;
     await page.route("**/glu/api/todoist/task/*/time-total", (route) =>
-      route.fulfill({ json: { minutes, counted: 1, ignored: 0, clamped: false } }),
+      route.fulfill({
+        json: { minutes, counted: 1, ignored: 0, clamped: false },
+      }),
     );
     let created = 0;
     await page.route("**/glu/api/todoist/comment", async (route) => {
@@ -1423,7 +2451,9 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.route("**/glu/api/todoist/comment/*", async (route) => {
       const id = new URL(route.request().url()).pathname.split("/").at(-1)!;
       deleted.push(id);
-      minutes -= posted.length ? (posted.at(-1)!.body as { minutes: number }).minutes : 0;
+      minutes -= posted.length
+        ? (posted.at(-1)!.body as { minutes: number }).minutes
+        : 0;
       await route.fulfill({ json: { deleted: true } });
     });
   };
@@ -1550,7 +2580,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     // The undo window lapsed unused; nothing was deleted behind our back.
     expect(deleted).toEqual([]);
     await expect(page.getByTestId("undo-bar")).toHaveCount(0);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 7 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 7, locale: "en" });
 
     // The outbox drains, and the badge refreshes off the post.
     await expect.poll(async () => (await readBlob(page))?.outbox).toEqual([]);
@@ -1587,6 +2617,7 @@ test.describe("focused task time comments (ADR 14)", () => {
       taskId: "t1",
       minutes: 6,
       environment: ["music", "headphones"],
+      locale: "en",
     });
   });
 
@@ -1608,7 +2639,9 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.getByRole("dialog").getByText("Settings").click();
     const settings = page.getByRole("dialog").last();
     // The preview is the artifact the user is deciding about.
-    await expect(settings.getByTestId("comment-preview-on-text")).toContainText("with music");
+    await expect(settings.getByTestId("comment-preview-on-text")).toContainText(
+      "with music",
+    );
     await settings.getByRole("switch", { name: "Say how you worked" }).click();
     await page.getByRole("button", { name: "Close settings" }).click();
     // The drawer is still open behind the modal, and it overlays the list.
@@ -1622,7 +2655,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.clock.fastForward("00:20");
 
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6, locale: "en" });
   });
 
   test("a run under the threshold posts nothing at all", async ({
@@ -1681,9 +2714,11 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.clock.fastForward("00:20");
 
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 5 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 5, locale: "en" });
     // The session was never the broken half — assert it stayed intact.
-    await expect.poll(async () => (await readBlob(page))?.day?.sessions?.length).toBe(1);
+    await expect
+      .poll(async () => (await readBlob(page))?.day?.sessions?.length)
+      .toBe(1);
   });
 
   /**
@@ -1714,7 +2749,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.clock.fastForward("00:20");
 
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 1 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 1, locale: "en" });
   });
 
   /** ADR 28: the threshold is a setting, and this is it moving. */
@@ -1733,13 +2768,19 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.getByRole("button", { name: "Open header" }).click();
     await page.getByRole("dialog").getByText("Settings").click();
     const settings = page.getByRole("dialog").last();
-    const ladder = settings.getByRole("radiogroup", { name: "Minimum time to log" });
+    const ladder = settings.getByRole("radiogroup", {
+      name: "Minimum time to log",
+    });
     // `exact` throughout: "5 min" is a substring of "15 min".
-    await expect(ladder.getByRole("radio", { name: "1 min", exact: true })).toBeChecked();
+    await expect(
+      ladder.getByRole("radio", { name: "1 min", exact: true }),
+    ).toBeChecked();
     // The tap lands on the rung's label, which is what a finger hits — the
     // radio itself is the transparent input underneath it.
     await ladder.getByText("5 min", { exact: true }).click();
-    await expect(ladder.getByRole("radio", { name: "5 min", exact: true })).toBeChecked();
+    await expect(
+      ladder.getByRole("radio", { name: "5 min", exact: true }),
+    ).toBeChecked();
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -1760,7 +2801,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.getByRole("button", { name: "Stop" }).click();
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6, locale: "en" });
   });
 
   test("finishing at 0:00 and `n` restart both post; 61 s posts [1m]", async ({
@@ -1782,7 +2823,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.clock.fastForward("05:01");
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 5 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 5, locale: "en" });
     await dismissTakeover(page);
 
     // `n` restart: abandons the session count but still posts the attention.
@@ -1791,7 +2832,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.keyboard.press("n");
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(2);
-    expect(posted[1].body).toEqual({ taskId: "t1", minutes: 3 });
+    expect(posted[1].body).toEqual({ taskId: "t1", minutes: 3, locale: "en" });
 
     // 61 seconds is the smallest qualifying run.
     await page.getByRole("button", { name: "Stop" }).click();
@@ -1800,7 +2841,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     await page.getByRole("button", { name: "Stop" }).click();
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(3);
-    expect(posted[2].body).toEqual({ taskId: "t1", minutes: 1 });
+    expect(posted[2].body).toEqual({ taskId: "t1", minutes: 1, locale: "en" });
   });
 
   test("a second run end during the grace commits the first immediately", async ({
@@ -1828,7 +2869,7 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     // The displaced entry commits at once; the bar now offers the newer one.
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 4 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 4, locale: "en" });
     await expect(page.getByTestId("undo-bar")).toContainText("[2m]");
   });
 
@@ -1855,7 +2896,7 @@ test.describe("focused task time comments (ADR 14)", () => {
     // drained after a reload posts without offering a bar nobody asked for.
     await page.clock.fastForward("00:20");
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 6, locale: "en" });
     await expect(page.getByTestId("undo-bar")).toHaveCount(0);
   });
 
@@ -1888,14 +2929,16 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     // First attempt fails; the entry stays queued and the badge says so.
     await page.clock.fastForward("00:15");
-    await expect(page.getByTestId("focused-pending")).toContainText("1 comment pending");
+    await expect(page.getByTestId("focused-pending")).toContainText(
+      "1 comment pending",
+    );
 
     // A reload between failure and retry must not duplicate it.
     await page.reload({ waitUntil: "load" });
     await page.clock.fastForward("00:15");
 
     await expect.poll(() => posted.length).toBe(1);
-    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 8 });
+    expect(posted[0].body).toEqual({ taskId: "t1", minutes: 8, locale: "en" });
     await expect(page.getByTestId("focused-pending")).toHaveCount(0);
   });
 
@@ -1923,11 +2966,20 @@ test.describe("focused task time comments (ADR 14)", () => {
 
     // The controls themselves, not their containers: the bar is allowed to
     // float over empty padding, never over something you might need to press.
-    for (const name of ["Start", "Stop", "Pause"]) {
-      const button = await page.getByRole("button", { name, exact: true }).boundingBox();
+    for (const name of ["Start", "Stop"]) {
+      const button = await page
+        .getByRole("button", { name, exact: true })
+        .boundingBox();
       expect(overlaps(bar!, button!), `${name} must stay clear`).toBe(false);
     }
-    for (const chip of ["Music", "Podcast", "TV", "Silence", "Noisy", "Headphones"]) {
+    for (const chip of [
+      "Music",
+      "Podcast",
+      "TV",
+      "Silence",
+      "Noisy",
+      "Headphones",
+    ]) {
       const box = await page.getByText(chip, { exact: true }).boundingBox();
       expect(overlaps(bar!, box!), `${chip} must stay clear`).toBe(false);
     }
@@ -1981,8 +3033,22 @@ test.describe("task actions (ADR 20)", () => {
       route.fulfill({
         json: {
           items: [
-            { id: "t1", title: "Ship ADR 20", description: "", uiPriority: 1, sectionId: null, order: 0 },
-            { id: "t2", title: "Other task", description: "", uiPriority: 4, sectionId: null, order: 1 },
+            {
+              id: "t1",
+              title: "Ship ADR 20",
+              description: "",
+              uiPriority: 1,
+              sectionId: null,
+              order: 0,
+            },
+            {
+              id: "t2",
+              title: "Other task",
+              description: "",
+              uiPriority: 4,
+              sectionId: null,
+              order: 1,
+            },
           ],
           truncated: false,
           cap: 200,
@@ -1990,7 +3056,9 @@ test.describe("task actions (ADR 20)", () => {
       }),
     );
     await page.route("**/glu/api/todoist/task/*/time-total", (route) =>
-      route.fulfill({ json: { minutes: 0, counted: 0, ignored: 0, clamped: false } }),
+      route.fulfill({
+        json: { minutes: 0, counted: 0, ignored: 0, clamped: false },
+      }),
     );
     await page.route("**/glu/api/todoist/comment", async (route) => {
       calls.comment.push(route.request().postDataJSON());
@@ -2000,20 +3068,28 @@ test.describe("task actions (ADR 20)", () => {
       const id = new URL(route.request().url()).pathname.split("/").at(-2)!;
       calls.close.push(id);
       if (options.closeDelayMs) {
-        await new Promise((resolve) => setTimeout(resolve, options.closeDelayMs));
+        await new Promise((resolve) =>
+          setTimeout(resolve, options.closeDelayMs),
+        );
       }
       if (options.closeStatus && options.closeStatus >= 400) {
-        return route.fulfill({ status: options.closeStatus, json: { error: "boom" } });
+        return route.fulfill({
+          status: options.closeStatus,
+          json: { error: "boom" },
+        });
       }
       return route.fulfill({ json: { closed: true } });
     });
     await page.route("**/glu/api/todoist/task/*/reopen", async (route) => {
-      calls.reopen.push(new URL(route.request().url()).pathname.split("/").at(-2)!);
+      calls.reopen.push(
+        new URL(route.request().url()).pathname.split("/").at(-2)!,
+      );
       return route.fulfill({ json: { reopened: true } });
     });
   };
 
-  const withSource = () => seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } });
+  const withSource = () =>
+    seed({ todoistSource: { type: "project", id: "p1", name: "GLU" } });
   const noCalls = (): Calls => ({ close: [], reopen: [], comment: [] });
 
   test("the circle completes a card instantly, and Undo brings it back", async ({
@@ -2033,13 +3109,20 @@ test.describe("task actions (ADR 20)", () => {
     await expect(page.getByTestId("task-card")).toHaveCount(1);
     await expect(page.getByTestId("undo-bar")).toContainText("Ship ADR 20");
 
-    await page.getByTestId("undo-bar").getByRole("button", { name: "Undo" }).click();
+    await page
+      .getByTestId("undo-bar")
+      .getByRole("button", { name: "Undo" })
+      .click();
     await expect(page.getByTestId("task-card")).toHaveCount(2);
     expect(calls.close).toEqual(["t1"]);
     expect(calls.reopen).toEqual(["t1"]);
   });
 
-  test("letting the bar lapse fires no reopen", async ({ page, open, seedStorage }) => {
+  test("letting the bar lapse fires no reopen", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     const calls = noCalls();
     await page.clock.install();
     await stubProxy(page, calls);
@@ -2087,16 +3170,20 @@ test.describe("task actions (ADR 20)", () => {
     await page.clock.fastForward("01:00");
 
     await expect(page.getByTestId("clock-slot")).toContainText("18:00");
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("running");
   });
 
-  test("completing the focused task keeps it in the slot, then auto-unfocuses", async ({
+  // ADR 35 supersedes ADR 20's lingering completed slot: the tap vacates it.
+  test("completing the focused task vacates the slot instantly, and Undo restores it", async ({
     page,
     open,
     seedStorage,
   }) => {
-    await page.clock.install();
-    await stubProxy(page, noCalls());
+    const calls = noCalls();
+    // A slow close proves the slot empties before the network answers.
+    await stubProxy(page, calls, { closeDelayMs: 800 });
     await seedStorage(withSource());
     await open();
 
@@ -2107,11 +3194,74 @@ test.describe("task actions (ADR 20)", () => {
       .getByTestId("focused-task")
       .getByRole("button", { name: /Complete “Ship ADR 20”/ })
       .click();
-    await expect(page.getByTestId("focused-task")).toBeVisible();
-    await expect(page.getByTestId("undo-bar")).toBeVisible();
+    await expect(page.getByTestId("focused-task")).toHaveCount(0);
+    // Unfocusing lifted the list exclusion, but the completing card must not
+    // resurface there either.
+    await expect(page.getByTestId("task-card")).toHaveCount(1);
+
+    await expect(page.getByTestId("undo-bar")).toContainText("Ship ADR 20");
+    await page
+      .getByTestId("undo-bar")
+      .getByRole("button", { name: "Undo" })
+      .click();
+
+    // Focus comes back exactly as it was, and the card stays hidden behind it.
+    await expect(page.getByTestId("focused-task")).toContainText("Ship ADR 20");
+    await expect(page.getByTestId("task-card")).toHaveCount(1);
+    expect(calls.reopen).toEqual(["t1"]);
+  });
+
+  test("letting the focused completion lapse leaves the slot empty for good", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    const calls = noCalls();
+    await page.clock.install();
+    await stubProxy(page, calls);
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 20”/ }).click();
+    await page
+      .getByTestId("focused-task")
+      .getByRole("button", { name: /Complete “Ship ADR 20”/ })
+      .click();
+    await expect(page.getByTestId("focused-task")).toHaveCount(0);
 
     await page.clock.fastForward("00:15");
+    await expect(page.getByTestId("undo-bar")).toHaveCount(0);
     await expect(page.getByTestId("focused-task")).toHaveCount(0);
+
+    // A later unrelated undo must not resurrect the old focus.
+    await page.getByRole("button", { name: /Complete “Other task”/ }).click();
+    await page
+      .getByTestId("undo-bar")
+      .getByRole("button", { name: "Undo" })
+      .click();
+    await expect(page.getByTestId("focused-task")).toHaveCount(0);
+    expect(calls.reopen).toEqual(["t2"]);
+  });
+
+  test("a failed close restores the focused slot with an error, and no undo bar", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
+    await stubProxy(page, noCalls(), { closeStatus: 500 });
+    await seedStorage(withSource());
+    await open();
+
+    await page.getByRole("button", { name: /Focus “Ship ADR 20”/ }).click();
+    await page
+      .getByTestId("focused-task")
+      .getByRole("button", { name: /Complete “Ship ADR 20”/ })
+      .click();
+
+    await expect(page.getByTestId("focused-task")).toContainText("Ship ADR 20");
+    await expect(page.getByTestId("focused-error")).toBeVisible();
+    await expect(page.getByTestId("undo-bar")).toHaveCount(0);
+    await expect(page.getByTestId("task-card")).toHaveCount(1);
   });
 
   test("cross-type displacement commits a pending comment immediately", async ({
@@ -2134,9 +3284,11 @@ test.describe("task actions (ADR 20)", () => {
 
     // …and completing another task displaces it, committing the comment.
     await page.getByRole("button", { name: /Complete “Other task”/ }).click();
-    await expect(page.getByTestId("undo-bar")).toContainText("Completed · Other task");
+    await expect(page.getByTestId("undo-bar")).toContainText(
+      "Completed · Other task",
+    );
     await expect.poll(() => calls.comment.length).toBe(1);
-    expect(calls.comment[0]).toEqual({ taskId: "t1", minutes: 4 });
+    expect(calls.comment[0]).toEqual({ taskId: "t1", minutes: 4, locale: "en" });
   });
 
   test("complete and focus targets are both ≥44px and never overlap", async ({
@@ -2151,10 +3303,18 @@ test.describe("task actions (ADR 20)", () => {
     const complete = await page
       .getByRole("button", { name: /Complete “Ship ADR 20”/ })
       .boundingBox();
-    const focus = await page.getByRole("button", { name: /Focus “Ship ADR 20”/ }).boundingBox();
+    const focus = await page
+      .getByRole("button", { name: /Focus “Ship ADR 20”/ })
+      .boundingBox();
 
-    for (const [name, box] of [["complete", complete], ["focus", focus]] as const) {
-      expect(Math.min(box!.width, box!.height), `${name} target`).toBeGreaterThanOrEqual(44);
+    for (const [name, box] of [
+      ["complete", complete],
+      ["focus", focus],
+    ] as const) {
+      expect(
+        Math.min(box!.width, box!.height),
+        `${name} target`,
+      ).toBeGreaterThanOrEqual(44);
     }
     expect(overlaps(complete!, focus!)).toBe(false);
   });
@@ -2174,7 +3334,10 @@ test.describe("final-countdown takeover (ADR 21)", () => {
   // Below `sm` the clock already owns the whole first viewport (ADR 08), so
   // there is nothing beside it to flood — the contracts below are `sm`-and-up.
   test.beforeEach(({}, testInfo) => {
-    test.skip(testInfo.project.name.includes("half-tablet"), "no takeover below `sm`");
+    test.skip(
+      testInfo.project.name.includes("half-tablet"),
+      "no takeover below `sm`",
+    );
   });
 
   test("engages at the 60 s mark and covers everything but the clock", async ({
@@ -2193,10 +3356,13 @@ test.describe("final-countdown takeover (ADR 21)", () => {
 
     const layers = await page.evaluate(() => ({
       overlayZ: Number(
-        getComputedStyle(document.querySelector('[data-testid="takeover-overlay"]')!).zIndex,
+        getComputedStyle(
+          document.querySelector('[data-testid="takeover-overlay"]')!,
+        ).zIndex,
       ),
       clockZ: Number(
-        getComputedStyle(document.querySelector('[data-testid="clock-slot"]')!).zIndex,
+        getComputedStyle(document.querySelector('[data-testid="clock-slot"]')!)
+          .zIndex,
       ),
     }));
     expect(layers.clockZ).toBeGreaterThan(layers.overlayZ);
@@ -2217,10 +3383,14 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(overlay(page)).toHaveAttribute("data-phase", "on");
 
     // Aim at the Stop button: the overlay takes the tap.
-    const stop = (await page.getByRole("button", { name: "Stop" }).boundingBox())!;
+    const stop = (await page
+      .getByRole("button", { name: "Stop" })
+      .boundingBox())!;
     await page.mouse.click(stop.x + stop.width / 2, stop.y + stop.height / 2);
 
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("running");
     await expect(overlay(page)).toHaveCount(0);
 
     // The chrome the tap asked for stays: the run keeps ticking under the
@@ -2234,7 +3404,10 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(overlay(page)).toHaveCount(0);
   });
 
-  test("hotkeys work while covered, and pausing retracts it", async ({ page, open }) => {
+  test("hotkeys work while covered, and pausing retracts it", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
 
@@ -2245,7 +3418,9 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(overlay(page)).toBeVisible();
 
     await page.keyboard.press("p");
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("paused");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("paused");
     await expect(overlay(page)).toHaveCount(0);
   });
 
@@ -2298,7 +3473,14 @@ test.describe("final-countdown takeover (ADR 21)", () => {
       route.fulfill({
         json: {
           items: [
-            { id: "t1", title: "Ship it", description: "", uiPriority: 1, sectionId: null, order: 0 },
+            {
+              id: "t1",
+              title: "Ship it",
+              description: "",
+              uiPriority: 1,
+              sectionId: null,
+              order: 0,
+            },
           ],
           truncated: false,
           cap: 200,
@@ -2306,7 +3488,9 @@ test.describe("final-countdown takeover (ADR 21)", () => {
       }),
     );
     await page.route("**/glu/api/todoist/task/*/time-total", (route) =>
-      route.fulfill({ json: { minutes: 0, counted: 0, ignored: 0, clamped: false } }),
+      route.fulfill({
+        json: { minutes: 0, counted: 0, ignored: 0, clamped: false },
+      }),
     );
     await page.route("**/glu/api/todoist/comment", (route) =>
       route.fulfill({ json: { posted: true } }),
@@ -2330,9 +3514,14 @@ test.describe("final-countdown takeover (ADR 21)", () => {
 
     const layers = await page.evaluate(() => ({
       overlayZ: Number(
-        getComputedStyle(document.querySelector('[data-testid="takeover-overlay"]')!).zIndex,
+        getComputedStyle(
+          document.querySelector('[data-testid="takeover-overlay"]')!,
+        ).zIndex,
       ),
-      barZ: Number(getComputedStyle(document.querySelector('[data-testid="undo-bar"]')!).zIndex),
+      barZ: Number(
+        getComputedStyle(document.querySelector('[data-testid="undo-bar"]')!)
+          .zIndex,
+      ),
     }));
     // Aesthetics never outrank an expiring choice.
     expect(layers.barZ).toBeGreaterThan(layers.overlayZ);
@@ -2347,7 +3536,10 @@ test.describe("final-countdown takeover (ADR 21)", () => {
    * clock has to honour that tap itself or the hero surface is the one place
    * the takeover ignores.
    */
-  test("a tap on the clock itself dissolves the 00:00 takeover", async ({ page, open }) => {
+  test("a tap on the clock itself dissolves the 00:00 takeover", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
 
@@ -2370,7 +3562,11 @@ test.describe("final-countdown takeover (ADR 21)", () => {
    * crossing, and a page load has none behind it — a reload restores the app,
    * not the endgame screen.
    */
-  test("a reload at 00:00 comes back to the whole page", async ({ page, open, seedStorage }) => {
+  test("a reload at 00:00 comes back to the whole page", async ({
+    page,
+    open,
+    seedStorage,
+  }) => {
     await page.clock.install({ time: new Date("2026-07-24T09:00:00Z") });
     await seedStorage(
       seed({
@@ -2388,12 +3584,19 @@ test.describe("final-countdown takeover (ADR 21)", () => {
     await expect(overlay(page)).toHaveCount(0);
 
     // Header and transport are both there, no dismissal needed.
-    await expect(page.getByRole("button", { name: "Open header" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open header" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Start" }).click();
-    await expect.poll(async () => (await readBlob(page))?.status).toBe("running");
+    await expect
+      .poll(async () => (await readBlob(page))?.status)
+      .toBe("running");
   });
 
-  test("reduced motion crossfades instead of sweeping", async ({ page, open }) => {
+  test("reduced motion crossfades instead of sweeping", async ({
+    page,
+    open,
+  }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.clock.install();
     await open();
@@ -2404,7 +3607,9 @@ test.describe("final-countdown takeover (ADR 21)", () => {
 
     // Straight to `on`: no positional entrance phase at all.
     await expect(overlay(page)).toHaveAttribute("data-phase", "on");
-    const transform = await overlay(page).evaluate((el) => getComputedStyle(el).transform);
+    const transform = await overlay(page).evaluate(
+      (el) => getComputedStyle(el).transform,
+    );
     expect(["none", "matrix(1, 0, 0, 1, 0, 0)"]).toContain(transform);
   });
 });
@@ -2417,10 +3622,16 @@ test.describe("final-countdown takeover (ADR 21)", () => {
  */
 test.describe("no takeover below `sm` (ADR 21)", () => {
   test.beforeEach(({}, testInfo) => {
-    test.skip(!testInfo.project.name.includes("half-tablet"), "half-tablet contract");
+    test.skip(
+      !testInfo.project.name.includes("half-tablet"),
+      "half-tablet contract",
+    );
   });
 
-  test("the final minute and 00:00 both leave the page whole", async ({ page, open }) => {
+  test("the final minute and 00:00 both leave the page whole", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
 
@@ -2439,9 +3650,11 @@ test.describe("no takeover below `sm` (ADR 21)", () => {
     await expect(takeoverOverlay(page)).toHaveCount(0);
 
     await page.getByText("Music", { exact: true }).click();
-    await expect.poll(async () => (await readBlob(page))?.environment).toMatchObject({
-      music: true,
-    });
+    await expect
+      .poll(async () => (await readBlob(page))?.environment)
+      .toMatchObject({
+        music: true,
+      });
   });
 });
 
@@ -2455,7 +3668,10 @@ test.describe("legal pages (ADR 26)", () => {
    * do not render — they are not the app shell. Relative path, never a leading
    * slash: that escapes the basePath (ADR 09's footgun).
    */
-  const openDoc = async (page: import("@playwright/test").Page, path: "privacy" | "terms") => {
+  const openDoc = async (
+    page: import("@playwright/test").Page,
+    path: "privacy" | "terms",
+  ) => {
     await page.goto(path, { waitUntil: "load" });
   };
 
@@ -2466,7 +3682,9 @@ test.describe("legal pages (ADR 26)", () => {
     await open();
     await page.getByRole("button", { name: "Open header" }).click();
 
-    const legal = page.getByRole("dialog").getByRole("navigation", { name: "Legal" });
+    const legal = page
+      .getByRole("dialog")
+      .getByRole("navigation", { name: "Legal" });
     for (const [name, path] of [
       ["Privacy Policy", "/glu/privacy"],
       ["Terms of Service", "/glu/terms"],
@@ -2482,13 +3700,19 @@ test.describe("legal pages (ADR 26)", () => {
     }
   });
 
-  test("both routes render their document and cross-link to each other", async ({ page }) => {
+  test("both routes render their document and cross-link to each other", async ({
+    page,
+  }) => {
     await openDoc(page, "privacy");
-    await expect(page.getByRole("heading", { level: 1, name: "Privacy Policy" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Privacy Policy" }),
+    ).toBeVisible();
     await expect(page.getByText("Last updated:")).toBeVisible();
     await expect(page).toHaveTitle(/Privacy Policy/);
     // The claims the ADR holds the copy to.
-    await expect(page.getByRole("heading", { name: /stored on your device/ })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /stored on your device/ }),
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: /Todoist/ })).toBeVisible();
 
     await page
@@ -2496,7 +3720,9 @@ test.describe("legal pages (ADR 26)", () => {
       .getByRole("link", { name: "Terms of Service" })
       .click();
 
-    await expect(page.getByRole("heading", { level: 1, name: "Terms of Service" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Terms of Service" }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/glu\/terms$/);
     await expect(page).toHaveTitle(/Terms of Service/);
 
@@ -2507,19 +3733,26 @@ test.describe("legal pages (ADR 26)", () => {
     await expect(page).toHaveURL(/\/glu\/privacy$/);
   });
 
-  test("the documents scroll where the app deliberately does not", async ({ page }) => {
+  test("the documents scroll where the app deliberately does not", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await openDoc(page, "terms");
 
     // The inverse of the ADR 02 layout contract: the shell's `overflow: hidden`
     // must not have leaked out of `.shell` and onto the document.
     const scrollable = await page.evaluate(
-      () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
+      () =>
+        document.documentElement.scrollHeight >
+        document.documentElement.clientHeight,
     );
     expect(scrollable).toBe(true);
   });
 
-  test("back to GLU returns to the app under the basePath", async ({ page, seedStorage }) => {
+  test("back to GLU returns to the app under the basePath", async ({
+    page,
+    seedStorage,
+  }) => {
     // The one test in this block that ends up *in the app*, so it is the one
     // that has to declare itself a returning visitor — `/glu` gates on that
     // now (ADR 31), and these routes bypass the `open` fixture that otherwise
@@ -2551,7 +3784,10 @@ test.describe("documentation (ADR 29)", () => {
   };
 
   /** The whole point of the ADR: the drawer opens a modal, it does not navigate. */
-  test("the Docs row opens a modal without leaving the app", async ({ page, open }) => {
+  test("the Docs row opens a modal without leaving the app", async ({
+    page,
+    open,
+  }) => {
     await open();
     const before = page.url();
 
@@ -2562,7 +3798,9 @@ test.describe("documentation (ADR 29)", () => {
     // taken the clock with it, along with the wake lock and the primed audio
     // context that never survive a page teardown.
     await expect(page.getByTestId("clock-slot")).toBeAttached();
-    await expect(page.getByRole("heading", { name: "The timer" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "The timer" }),
+    ).toBeVisible();
 
     // One Escape closes the whole overlay stack — the modal *and* the drawer
     // behind it. Mantine's overlays both listen on the window, so the keydown
@@ -2576,7 +3814,10 @@ test.describe("documentation (ADR 29)", () => {
     expect(page.url()).toBe(before);
   });
 
-  test("a running timer keeps counting behind the docs modal", async ({ page, open }) => {
+  test("a running timer keeps counting behind the docs modal", async ({
+    page,
+    open,
+  }) => {
     await page.clock.install();
     await open();
     await page.getByRole("button", { name: "Start" }).click();
@@ -2607,7 +3848,10 @@ test.describe("documentation (ADR 29)", () => {
    * report 2026-07-25). Same header class serves the drawer and the Settings
    * modal, so this covers all three.
    */
-  test("the sticky modal header keeps the scrolling prose behind it", async ({ page, open }) => {
+  test("the sticky modal header keeps the scrolling prose behind it", async ({
+    page,
+    open,
+  }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await open();
     await openDocsModal(page);
@@ -2672,7 +3916,9 @@ test.describe("documentation (ADR 29)", () => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await openDocsPage(page);
 
-    await expect(page.getByRole("heading", { level: 1, name: "How GLU works" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "How GLU works" }),
+    ).toBeVisible();
     await expect(page).toHaveTitle(/How GLU works/);
     await expect(page.getByText("Last updated:")).toBeVisible();
 
@@ -2689,7 +3935,9 @@ test.describe("documentation (ADR 29)", () => {
 
     // The inverse of the ADR 02 layout contract, as for the legal routes.
     const scrollable = await page.evaluate(
-      () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
+      () =>
+        document.documentElement.scrollHeight >
+        document.documentElement.clientHeight,
     );
     expect(scrollable).toBe(true);
   });
@@ -2710,15 +3958,113 @@ test.describe("documentation (ADR 29)", () => {
       .getByRole("link", { name: "Documentation" })
       .click();
     await expect(page).toHaveURL(/\/glu\/docs$/);
-    await expect(page.getByRole("heading", { level: 1, name: "How GLU works" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "How GLU works" }),
+    ).toBeVisible();
   });
 
-  test("back to GLU returns to the app under the basePath", async ({ page, seedStorage }) => {
+  test("back to GLU returns to the app under the basePath", async ({
+    page,
+    seedStorage,
+  }) => {
     // As in the ADR 26 block: this one lands in the app, so it seeds a
     // returning visitor past ADR 31's gate.
     await seedStorage(seed());
     await openDocsPage(page);
     await page.getByRole("link", { name: /Back to GLU/ }).click();
     await expect(page.getByTestId("clock-slot")).toBeVisible();
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* ADR 39 — Limit the items in a section                                      */
+/* ------------------------------------------------------------------------- */
+
+test.describe("section item limit (ADR 39)", () => {
+  type Page = import("@playwright/test").Page;
+
+  /** Twelve tasks under one section header — one ceiling away from a long list. */
+  const twelve = {
+    items: Array.from({ length: 12 }, (_, i) => ({
+      id: String(i + 1),
+      title: `Task ${i + 1}`,
+      description: "",
+      uiPriority: 4,
+      sectionId: "s1",
+      order: i,
+    })),
+    truncated: false,
+    cap: 200,
+  };
+
+  const stubTaskView = async (page: Page) => {
+    await page.route("**/glu/api/auth/todoist/status", (route) =>
+      route.fulfill({ json: { authenticated: true, name: "Ioan", id: "42" } }),
+    );
+    await page.route("**/glu/api/todoist/projects", (route) =>
+      route.fulfill({ json: { items: [{ id: "p1", name: "GLU" }] } }),
+    );
+    await page.route("**/glu/api/todoist/labels", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/glu/api/todoist/filters", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/glu/api/todoist/sections**", (route) =>
+      route.fulfill({
+        json: { items: [{ id: "s1", name: "Today", order: 1 }] },
+      }),
+    );
+    await page.route("**/glu/api/todoist/tasks**", (route) =>
+      route.fulfill({ json: twelve }),
+    );
+  };
+
+  test("the ladder caps a section, +N more lifts it, and a reload restores the ceiling", async ({
+    page,
+    open,
+  }) => {
+    await stubTaskView(page);
+    await open();
+
+    await page.getByRole("button", { name: "Choose task source" }).click();
+    await page.getByPlaceholder("Choose a project").click();
+    await page.getByRole("option", { name: "GLU" }).click();
+
+    // Default is All: every task, exactly as before this ADR.
+    await expect(page.getByTestId("task-card")).toHaveCount(12);
+
+    // Through the real surface: drawer → Settings → the ladder.
+    await page.getByRole("button", { name: "Open header" }).click();
+    await page.getByRole("dialog").getByText("Settings").click();
+    const settings = page.getByRole("dialog").last();
+    const ladder = settings.getByRole("radiogroup", {
+      name: "Limit the items in a section to",
+    });
+    await expect(
+      ladder.getByRole("radio", { name: "All", exact: true }),
+    ).toBeChecked();
+    // `exact` throughout: "10" is a substring of "100".
+    await ladder.getByText("10", { exact: true }).click();
+    await expect(
+      ladder.getByRole("radio", { name: "10", exact: true }),
+    ).toBeChecked();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await expect(page.getByTestId("task-card")).toHaveCount(10);
+    const more = page.getByRole("button", { name: "+2 more" });
+    await expect(more).toBeVisible();
+
+    // One tap gets the tail back…
+    await more.click();
+    await expect(page.getByTestId("task-card")).toHaveCount(12);
+    await expect(page.getByRole("button", { name: /more$/ })).toHaveCount(0);
+
+    // …for this visit only. The setting is the durable answer, not the tap.
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByTestId("task-card")).toHaveCount(10);
+    await expect(page.getByRole("button", { name: "+2 more" })).toBeVisible();
   });
 });

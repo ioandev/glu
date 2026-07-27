@@ -11,6 +11,11 @@
   background: var(--glu-page-bg);
   color: var(--glu-page-fg);
   font-family: var(--glu-font-sans), system-ui, sans-serif;
+  /* Documents are for reading and quoting — the app-wide `user-select: none`
+     in `globals.css` is lifted here (and in `docs.module.css` for the modal
+     frame, which renders this prose outside this page). */
+  -webkit-user-select: text;
+  user-select: text;
   /* Wide enough to breathe on a tablet, narrow enough to stay readable. */
   padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px) 96px;
 }
@@ -159,4 +164,19 @@
   letter-spacing: var(--glu-label-tracking);
   text-transform: var(--glu-label-transform);
   font-size: var(--glu-label-size);
+}
+
+/* ADR 44: the convenience-translation line above a non-English legal document.
+   It has to read as an aside about the document rather than as part of it, so
+   it takes the muted label treatment and a rule down the leading edge — the
+   same accent ink the task list uses for "attend to this", which clears the
+   contrast gate on every chrome surface. */
+.notice {
+  margin: 20px 0 0;
+  padding: 10px 0 10px 14px;
+  border-inline-start: 2px solid var(--glu-accent);
+  color: var(--glu-muted);
+  font-family: var(--glu-label-family);
+  font-size: var(--glu-label-size);
+  line-height: 1.5;
 }

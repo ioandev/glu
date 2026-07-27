@@ -148,6 +148,9 @@ export function clientKey(req: Request): string {
   );
 }
 
+// Not ReDoS-able: every quantifier is bounded and none nest, so backtracking
+// is constant — safe-regex is conservative about `{1,3}` expansion (ADR 38).
+// eslint-disable-next-line security/detect-unsafe-regex
 const IPV4_MAPPED = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i;
 
 /**

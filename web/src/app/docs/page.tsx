@@ -3,7 +3,9 @@ import { DocsContent } from "@/components/docs/DocsContent";
 import { pageMetadata } from "@/lib/siteMetadata";
 
 /** Copy, canonical and card from the shared table (ADR 30). */
-export const metadata: Metadata = pageMetadata("/docs");
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("/docs");
+}
 
 /**
  * `/glu/docs` (ADR 29). Like the legal routes, deliberately outside `AppShell`:

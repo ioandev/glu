@@ -4,7 +4,9 @@ import { WelcomeContent } from "@/components/welcome/WelcomeContent";
 import { pageMetadata } from "@/lib/siteMetadata";
 
 /** Copy, canonical and card from the shared table (ADR 30). */
-export const metadata: Metadata = pageMetadata("/welcome");
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("/welcome");
+}
 
 /**
  * `/glu/welcome` (ADR 31) — GLU's pitch as a page you can link to.

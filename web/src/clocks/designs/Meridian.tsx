@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -33,6 +34,8 @@ export function Meridian({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
   const lit = Math.round(p.remainingFraction * TICKS);
 
@@ -74,7 +77,7 @@ export function Meridian({
             fill="var(--clk-muted)"
             fontFamily="var(--glu-font-mono), monospace"
           >
-            {stateLabel(state).toUpperCase()}
+            {stateLabel(state).toLocaleUpperCase(locale)}
             {showSession ? (
               <tspan data-testid="clock-session"> {"\u00b7"} {session}</tspan>
             ) : null}

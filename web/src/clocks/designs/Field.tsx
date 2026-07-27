@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -24,6 +25,8 @@ export const fieldTheme: ClockTheme = {
 };
 
 export function Field({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
 
   return (
@@ -43,7 +46,7 @@ export function Field({ remainingMs, totalMs, state, accent }: ClockProps) {
           {p.seconds}
         </span>
         <span className={designs.mono} style={{ fontSize: "3cqmin", letterSpacing: "0.3em" }}>
-          {stateLabel(state).toUpperCase()}
+          {stateLabel(state).toLocaleUpperCase(locale)}
         </span>
       </div>
     </ClockFrame>

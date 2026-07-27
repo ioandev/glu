@@ -176,6 +176,16 @@
   audit reading a **production** `script-src` should still see exactly
   `'self' 'nonce-…' 'strict-dynamic'`.
 
+- Amended: 2026-07-26 — **both runtime stages delete npm** (`rm -rf
+  /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx`). An
+  image scan flagged CVEs in `tar`, `undici` and `brace-expansion` at
+  vulnerable versions that appear nowhere in either lockfile: they are npm's
+  own vendored dependencies, shipped by the `node:24-alpine` base. Neither
+  container ever runs npm (`CMD` is plain `node`), so the findings were noise
+  — but deleting the toolchain zeroes them deterministically, where chasing a
+  newer base tag would not (npm lags its deps' fixes). The build/deps stages
+  keep npm; only the final stage is stripped.
+
 - Deviation (2026-07-24, implementation): Phase B was written as *files only* —
   `publish.yml` ships with its `push: [main]` trigger commented out, and no
   repo, remote, registry or server was touched. Go-live is a human decision.

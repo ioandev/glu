@@ -34,10 +34,22 @@ export const Paused: Story = {
   ],
 };
 
+/**
+ * ADR 37: one primary button walks Start → Pause → Resume → Pause. Finding it
+ * by its label each time is the assertion — there is no second button to hit.
+ */
 export const StartPauseStop: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole("button")).toHaveLength(2);
+
     await userEvent.click(canvas.getByRole("button", { name: "Start" }));
+    await expect(useGluStore.getState().status).toBe("running");
+
+    await userEvent.click(canvas.getByRole("button", { name: "Pause" }));
+    await expect(useGluStore.getState().status).toBe("paused");
+
+    await userEvent.click(canvas.getByRole("button", { name: "Resume" }));
     await expect(useGluStore.getState().status).toBe("running");
 
     await userEvent.click(canvas.getByRole("button", { name: "Pause" }));

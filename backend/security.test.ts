@@ -31,6 +31,8 @@ describe("config validation (F-1, F-6)", () => {
   it("refuses a SESSION_SECRET below the iron-session floor", () => {
     expect(() =>
       readConfig(env({ PUBLIC_ORIGIN: "https://ioan.dev", SESSION_SECRET: "too-short" })),
+      // Built from this package's own numeric constant, not from input.
+      // eslint-disable-next-line security/detect-non-literal-regexp
     ).toThrow(new RegExp(`${MIN_SESSION_SECRET_LENGTH} characters`));
   });
 

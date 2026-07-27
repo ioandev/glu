@@ -268,7 +268,9 @@ defensible interpretation.
    proving the layout contract before any widget lands. Verify at ~1180 px and
    ~590 px (tablet / half-tablet) with devtools device emulation.
 4. **Timer panel** — large mm:ss text + Start/Pause/Stop buttons (`size="xl"`,
-   the primary touch targets). **Gotcha:** set `font-variant-numeric:
+   the primary touch targets). *(Amended 2026-07-26 by ADR 37: two buttons, not
+   three — one primary that reads Start / Pause / Resume by status, plus Stop.
+   Same transitions; nothing in the row is ever disabled.)* **Gotcha:** set `font-variant-numeric:
    tabular-nums` (or a monospace stack) on the time text, or the digits reflow
    horizontally every second and the panel shimmies. Keep `remaining`/`total`
    flowing through the panel's props so the future clock-face component is a

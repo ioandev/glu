@@ -14,6 +14,26 @@ body {
   height: 100%;
 }
 
+/* The app is a touch surface first: a long-press on the clock, a drag across
+   the gallery or a double-tap on ± should not leave a blue selection behind.
+   Selection is therefore off by default and turned back *on* per surface —
+   form fields below, and the prose treatments in their own modules
+   (`legal.module.css`, `docs.module.css`, `welcome.module.css`) plus the
+   Todoist task text. A direct rule on a descendant always beats an inherited
+   value, so those opt-ins need no extra specificity. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Mantine's default dimmed tone (gray-6) is 3.32:1 on white — below the
    contrast gate ADR 03 enforces. Remap the token rather than avoiding
    `c="dimmed"` in components. */

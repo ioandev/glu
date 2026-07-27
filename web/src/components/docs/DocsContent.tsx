@@ -1,5 +1,6 @@
+import { getLocale } from "next-intl/server";
 import { LegalPage } from "@/components/legal/LegalPage";
-import { DOCS_TITLE, DOCS_UPDATED, docsIntro, docsSections } from "./DocsSections";
+import { loadDocs } from "./content";
 
 /**
  * The documentation as a page (ADR 29) — the same shell the two legal documents
@@ -7,15 +8,20 @@ import { DOCS_TITLE, DOCS_UPDATED, docsIntro, docsSections } from "./DocsSection
  * prose treatment.
  *
  * A server component with no client JavaScript of its own: the copy is static,
- * and the theming arrives from the root layout.
+ * and the theming arrives from the root layout. It is `async` only to await the
+ * locale's content module (ADR 44) — the prose is still resolved and rendered
+ * on the server, which is the whole point of keeping it out of the message
+ * catalog.
  */
-export function DocsContent() {
+export async function DocsContent() {
+  const content = await loadDocs(await getLocale());
+
   return (
     <LegalPage
-      title={DOCS_TITLE}
-      updated={DOCS_UPDATED}
-      intro={docsIntro}
-      sections={docsSections}
+      title={content.title}
+      updated={content.updated}
+      intro={content.intro}
+      sections={content.sections}
     />
   );
 }

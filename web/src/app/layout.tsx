@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/core";
 import { ChromeBootstrap } from "@/chrome/ChromeBootstrap";
 import { ChromeSync } from "@/chrome/ChromeSync";
@@ -97,20 +99,37 @@ export default async function RootLayout({
   // mismatch it won't patch. See `ChromeBootstrap` for the long version.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
+  // Resolved server-side from the cookie (ADR 44), which is what keeps the
+  // language out of the first-paint problem the colour scheme and the chrome
+  // both have. The store's copy of this setting is a *mirror* for the Settings
+  // row; nothing renders from it, because `skipHydration: true` means it does
+  // not exist yet at first paint. Here it is simply known.
+  const locale = await getLocale();
+
   return (
     // mantineHtmlProps carries suppressHydrationWarning — this is what kills the
     // color-scheme hydration mismatch (ADR 01).
-    <html lang="en" className={fontClassNames} {...mantineHtmlProps}>
+    <html lang={locale} className={fontClassNames} {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="auto" nonce={nonce} suppressHydrationWarning />
         <ChromeBootstrap clockThemes={CLOCK_THEME_BY_ID} nonce={nonce} />
       </head>
       <body>
-        <MantineProvider theme={theme} defaultColorScheme="auto">
-          <ChromeSync />
-          <ClockSync />
-          {children}
-        </MantineProvider>
+        {/*
+         * Messages are read from the request configuration rather than passed
+         * explicitly, so the whole UI catalog reaches client components. The
+         * *prose* — the manual, Privacy, Terms — is deliberately not in it and
+         * never crosses this boundary: those are per-locale server modules
+         * (ADR 44), which is how `/glu/docs` keeps shipping its text as HTML
+         * rather than as a payload.
+         */}
+        <NextIntlClientProvider>
+          <MantineProvider theme={theme} defaultColorScheme="auto">
+            <ChromeSync />
+            <ClockSync />
+            {children}
+          </MantineProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

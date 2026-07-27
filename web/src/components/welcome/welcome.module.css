@@ -18,6 +18,10 @@
   color: var(--glu-page-fg);
   font-family: var(--glu-font-sans), system-ui, sans-serif;
   padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px) 96px;
+  /* A pitch is read, not operated: the app-wide `user-select: none` from
+     `globals.css` is lifted here the way it is for the documents. */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .column {
@@ -111,6 +115,24 @@
    nobody is meant to notice. */
 .cta[aria-disabled="true"] {
   cursor: default;
+}
+
+/* ── Install callout ─────────────────────────────────────────────────────── */
+
+/* A short, visible note pointing at the browser's own install control —
+   deliberately not the muted trailing footnote, since that read as easy to
+   miss on a first visit. Accented border only (not a filled background) so it
+   reads as a highlight, not a warning. */
+.installCallout {
+  margin: 0 auto clamp(28px, 5vh, 40px);
+  max-width: 46rem;
+  padding: 14px 20px;
+  background: var(--glu-surface);
+  border: var(--glu-border-width) solid var(--glu-accent);
+  border-radius: var(--glu-radius-card);
+  color: var(--glu-page-fg);
+  text-align: center;
+  line-height: 1.6;
 }
 
 /* ── Feature cards ───────────────────────────────────────────────────────── */

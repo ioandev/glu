@@ -1,0 +1,71 @@
+# Dependabot version updates (ADR 38). Security *alerts* and automatic
+# security PRs are repo settings, not config — see HUMAN-TODO.
+#
+# web/ and backend/ are independent packages with their own lockfiles (ADR 22),
+# so each gets its own npm entry — a single root entry would find no lockfile
+# (there is deliberately no root package.json) and silently cover nothing.
+# Same for docker: each package owns its Dockerfile and build context.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    # Don't adopt a release in its first week — supply-chain compromises of
+    # popular packages are usually caught within days of publish (ADR 38).
+    cooldown:
+      default-days: 7
+    # One grouped PR for routine bumps; majors stay individual so a breaking
+    # bump is reviewed on its own.
+    groups:
+      web-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    # Don't adopt a release in its first week — supply-chain compromises of
+    # popular packages are usually caught within days of publish (ADR 38).
+    cooldown:
+      default-days: 7
+    groups:
+      backend-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # The workflows pin actions by tag (ADR 16 house style); this keeps the tags
+  # current — including the ones security.yml itself uses.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Don't adopt a release in its first week — supply-chain compromises of
+    # popular packages are usually caught within days of publish (ADR 38).
+    cooldown:
+      default-days: 7
+
+  # Both tiers build FROM node:24-alpine; this surfaces base-image bumps.
+  # Trivy (security.yml) is the one that flags CVEs *inside* the pinned base.
+  - package-ecosystem: docker
+    directory: /web
+    schedule:
+      interval: weekly
+    # Don't adopt a release in its first week — supply-chain compromises of
+    # popular packages are usually caught within days of publish (ADR 38).
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    # Don't adopt a release in its first week — supply-chain compromises of
+    # popular packages are usually caught within days of publish (ADR 38).
+    cooldown:
+      default-days: 7

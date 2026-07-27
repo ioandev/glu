@@ -36,6 +36,16 @@ Format: `- [ ] ADR NN, criterion "<quote>" — <why deferred> — <what to do>`.
 - [ ] ADR 14 amendment c, the undo DELETE — needs a real account, and it is the **only** part of the two-phase undo no test can prove: every backend test mocks the upstream, so `GET /api/v1/comments/{id}` and `DELETE /api/v1/comments/{id}` are taken on the docs' word — the same assumption that turned out to be wrong for `GET /api/v1/filters` (see ADR 12 above). Run a qualifying timer, press Undo in the 5 s after the comment appears, and confirm the comment is gone from Todoist and the badge drops back.
 - [ ] ADR 20, criterion "record the observed Todoist behaviour for fetching a completed task by id" — needs a real account — complete a task, fetch it by id after the undo window, and replace the "unverified tonight" note at the top of ADR 20 with the answer.
 
+## Security scanning (ADR 38)
+
+- [ ] ADR 38, Dependabot alerts — settings are not files — in repo Settings → Advanced Security: enable Dependabot alerts + Dependabot security updates (version updates come from the committed `.github/dependabot.yml`).
+- [ ] ADR 38, secret scanning — same page — enable secret scanning + push protection (free on public repos; Gitleaks in CI covers history, push protection covers the moment before the mistake lands).
+- [ ] ADR 38, CodeQL — `codeql.yml` is ADVANCED setup — leave "default setup" OFF in Settings → Advanced Security → Code scanning; enabling both makes GitHub reject this workflow's uploads.
+- [ ] ADR 38, criterion "first green runs" — needs GitHub — after pushing, confirm `codeql.yml` and `security.yml` both complete; the local baselines were green (audit, gitleaks, hadolint, actionlint, zizmor medium+, semgrep), so a red first run means an environment difference worth recording in ADR 38.
+- [ ] ADR 38, first weekly cycle — needs a week — check the first scheduled `security.yml` run and the first grouped Dependabot PRs arrive; merge cadence is the recurring cost ADR 38 signed up for.
+- [ ] ADR 38, optional — Socket.dev (supply-chain behaviour analysis) is a third-party GitHub app and therefore an owner decision — install it or strike this line.
+- [ ] ADR 38, manual DAST — after the next deploy-shaped change — run the ZAP baseline + header scans per `docs/security-scanning.md` and record the first result.
+
 ## Local dev environment
 
 - [ ] ADR 09, WebKit browser dependencies — Playwright ships Debian/Ubuntu package names and this box is Arch-family; `libicu74` and `libflite1` were extracted from Ubuntu `.deb`s into `~/.cache/ms-playwright/webkit-2311/minibrowser-wpe/sys/lib/`, and `npm run test:e2e` sets `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1`. Re-do both after a `playwright install` that replaces the bundle. CI is unaffected (`--with-deps`).
@@ -43,7 +53,8 @@ Format: `- [ ] ADR NN, criterion "<quote>" — <why deferred> — <what to do>`.
 ## Alerts (ADR 18)
 
 - [ ] ADR 18, criterion "Backgrounded tab (real browser)" — needs a real OS notification — background the tab, let a run finish, then confirm the chime sounds, the notification appears, clicking it focuses the app, returning closes it, and a second finish replaces rather than stacks.
-- [ ] ADR 18, criterion "first Start … triggers the browser's notification prompt exactly once" — needs a fresh browser profile — start a run in a clean profile, confirm one prompt, decline it, and confirm the chime still works with no re-prompt.
+- [ ] ADR 18, criterion "first Start … triggers the browser's notification prompt exactly once" — needs a fresh browser profile — start a run in a clean profile, confirm one prompt, decline it, and confirm the chime still works with no re-prompt. **Superseded in part by ADR 41**: "once" is now "at most three times", so the clean-profile check is the line below.
+- [ ] ADR 41, criterion "three genuine OS prompts, then none" — needs a fresh browser profile, because a real permission dialog is not automatable — in a clean profile, press Start and **dismiss** the prompt (the ✕ or Esc, not Block) three times, confirming a prompt each time; on the fourth and fifth Start confirm none appears and the run still starts instantly. Then open Settings → Alerts, switch **Notify me when a session ends** on, confirm a prompt does appear, grant it, and confirm the switch stays on without closing the modal. Finally block the site's notifications in the browser, reopen Settings, try the switch, and confirm the instructions it shows actually match where that browser keeps the setting.
 
 ## Physical device
 

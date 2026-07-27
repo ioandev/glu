@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale, useTranslations } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -34,13 +35,16 @@ export function Mono({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const t = useTranslations("clock");
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={monoTheme} accent={accent} state={state}>
       <div className={classes.pad} style={{ justifyContent: "space-between" }}>
         <div className={designs.rowBetween}>
-          <span className={`${classes.label} ${designs.mono}`}>Timer_01</span>
+          <span className={`${classes.label} ${designs.mono}`}>{t("monoTimer")}</span>
           <span className={`${classes.label} ${designs.mono}`}>
             {Math.round(p.elapsedFraction * 100)}%
           </span>
@@ -87,7 +91,7 @@ export function Mono({
               fill="var(--clk-muted)"
               fontFamily="var(--glu-font-mono), monospace"
             >
-              {stateLabel(state).toUpperCase()}
+              {stateLabel(state).toLocaleUpperCase(locale)}
             </text>
           </svg>
         </div>

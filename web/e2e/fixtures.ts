@@ -18,7 +18,28 @@ type GluFixtures = {
  * A leading slash resolves against the *origin* and silently escapes the
  * basePath — the footgun ADR 09 called out. Every test goes through here.
  */
-async function openPath(page: Page, path = ".") {
+async function openPath(page: Page, baseURL: string | undefined, path = ".") {
+  /*
+   * ADR 44 pinned the suite to English.
+   *
+   * Without this the language comes from `Accept-Language`, which is the
+   * *browser's* setting, not the app's — so the ~390 assertions in this suite
+   * that match on English copy would pass or fail depending on the machine
+   * running them. Pinning the cookie makes the suite say out loud which
+   * language it is testing, and leaves `e2e/i18n.spec.ts` as the one place
+   * that deliberately says something else.
+   *
+   * Explicit `domain` + `path: "/"` rather than `url`: a cookie added by URL
+   * takes the URL's *directory* as its path (`/glu/`), which does not match a
+   * request for `/glu` itself — the app's own home route.
+   */
+  if (baseURL) {
+    const { hostname } = new URL(baseURL);
+    await page.context().addCookies([
+      { name: "glu-locale", value: "en", domain: hostname, path: "/" },
+    ]);
+  }
+
   // ADR 31 put a welcome gate in front of `/glu`, and this helper waits on the
   // clock — so without this, a test that seeds nothing sits on the landing page
   // until it times out. Every existing test means to be a *returning* user,
@@ -110,8 +131,8 @@ export const test = base.extend<GluFixtures>({
     });
   },
 
-  open: async ({ page }, use) => {
-    await use((path) => openPath(page, path));
+  open: async ({ page, baseURL }, use) => {
+    await use((path) => openPath(page, baseURL, path));
   },
 });
 
@@ -145,8 +166,20 @@ export const defaultState = {
   hasEnteredApp: true,
   stayAwakeAlways: false,
   stayAwakeWhileRunning: true,
+  // ADR 40: the shipped alert — ADR 18's chime, played once.
+  alertSoundId: "chime",
+  alertDurationSeconds: 0,
+  // ADR 41: nothing spent yet, and GLU's own half of the switch is on.
+  alertPromptsUsed: 0,
+  notifyOnSessionEnd: true,
   commentEnvironment: true,
   commentThresholdMinutes: 1,
+  // ADR 39: `SECTION_ITEM_LIMIT_ALL` — no ceiling.
+  sectionItemLimit: 0,
+  // ADR 44: follow the browser until told otherwise. Note this is the *store's*
+  // mirror; the language a test actually renders in comes from the `glu-locale`
+  // cookie, which `open()` pins to English for the whole suite.
+  locale: "auto",
   todoistSource: null,
   focusedTask: null,
   outbox: [],

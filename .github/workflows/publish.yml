@@ -163,8 +163,13 @@ jobs:
       - name: Is this the highest stable release?
         id: release
         if: github.event_name == 'release'
+        # The tag name is attacker-shaped input as far as the shell cares —
+        # `${{ }}` expands BEFORE bash parses, so a tag like `$(cmd)` would
+        # execute. Passing it through env keeps it data (ADR 38 / zizmor).
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          tag="${{ github.event.release.tag_name }}"
+          tag="$RELEASE_TAG"
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
             echo "is_latest=false" >> "$GITHUB_OUTPUT" # pre-release → :next, never :latest
           else
@@ -202,6 +207,10 @@ jobs:
       - name: Create manifest list & push tags
         working-directory: ${{ runner.temp }}/digests
         run: |
+          # SC2046: the splitting is the point — jq emits N "-t tag" args and
+          # printf one image ref per digest file; quoting would glue each into
+          # a single (broken) argument.
+          # shellcheck disable=SC2046
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.IMAGE_BASE }}-${{ matrix.tier }}@sha256:%s ' *)

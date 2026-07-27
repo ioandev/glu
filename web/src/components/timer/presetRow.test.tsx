@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { IntlWrapper } from "@/test/intl";
 import { MantineProvider } from "@mantine/core";
 import { MINUTE } from "@/lib/time";
 import { resetGluStore, useGluStore } from "@/store/gluStore";
@@ -17,9 +18,11 @@ const store = () => useGluStore.getState();
 /** Mantine's `Button` needs a provider; the row is the first thing here to use one. */
 const renderRow = () =>
   render(
-    <MantineProvider>
-      <PresetRow />
-    </MantineProvider>,
+    <IntlWrapper>
+      <MantineProvider>
+        <PresetRow />
+      </MantineProvider>
+    </IntlWrapper>,
   );
 
 /** Labels in DOM order — the ladder's ordering is half of what this file asserts. */

@@ -1,6 +1,8 @@
 import React from "react";
 import type { Preview } from "@storybook/nextjs-vite";
 import { MantineProvider } from "@mantine/core";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "../src/locales/en";
 import { theme } from "../src/theme";
 import { chromeCssVariables } from "../src/chrome/cssVariables";
 import { resolveChrome, CHROME_LIST } from "../src/chrome/registry";
@@ -54,6 +56,11 @@ const preview: Preview = {
       matchers: { color: /(background|color)$/i, date: /Date$/i },
     },
     viewport: { options: VIEWPORTS },
+    // Mounts the App Router context. Settings' Language row calls
+    // `useRouter().refresh()` to re-render the server tree after a language
+    // change (ADR 44), and without this every story containing it fails with
+    // "invariant expected app router to be mounted".
+    nextjs: { appDirectory: true },
     a11y: {
       // Dark/light legibility is an ADR 02 acceptance criterion — automate it.
       test: "error",
@@ -121,6 +128,11 @@ const preview: Preview = {
               have to live on the root element, exactly as the app puts them
               there before first paint (ADR 15). */}
           <RootTokens vars={vars} chromeId={chrome.id} clockId={clockId} scheme={scheme} />
+        {/* Global for the same reason Mantine's is (ADR 44): a story that
+            renders any translated component without it fails on a missing
+            next-intl context. Stories are always English — the catalogs are
+            reviewed in the diff, not in Storybook. */}
+        <NextIntlClientProvider locale="en" messages={enMessages}>
         <MantineProvider theme={theme} forceColorScheme={scheme}>
           <div
             className={fontClassNames}
@@ -139,6 +151,7 @@ const preview: Preview = {
             <Story />
           </div>
         </MantineProvider>
+        </NextIntlClientProvider>
         </>
       );
     },

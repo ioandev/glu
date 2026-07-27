@@ -22,6 +22,9 @@ WORKDIR /app
 # so the container process and its files line up with the server user. Replaces
 # node:alpine's default `node` (uid 1000); GLU is stateless and mounts nothing.
 RUN addgroup -g 5330 -S app && adduser -u 5330 -S -G app -h /app -H app
+# npm never runs in this image (CMD is plain `node`); its vendored deps are
+# what image scanners flag, so drop the whole toolchain from the runtime.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 # `output: 'standalone'` emits a minimal server + node_modules under
 # .next/standalone; static assets and public/ are copied alongside it.

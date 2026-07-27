@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import classes from "./legal.module.css";
 
 export interface LegalSection {
@@ -13,6 +14,8 @@ interface LegalPageProps {
   updated: string;
   intro: ReactNode;
   sections: LegalSection[];
+  /** ADR 44: the convenience-translation line, on non-English legal documents. */
+  notice?: ReactNode;
 }
 
 /**
@@ -29,36 +32,46 @@ interface LegalPageProps {
  * site's policy — a plausible-looking wrong document, the worst failure mode
  * this feature has.
  */
-export function LegalPage({ title, updated, intro, sections }: LegalPageProps) {
+export function LegalPage({ title, updated, intro, sections, notice }: LegalPageProps) {
+  // `useTranslations` works in a Server Component as long as it is not async —
+  // which is what keeps this shell free of client JavaScript (ADR 44).
+  const t = useTranslations("document");
+
   return (
     <main className={classes.page}>
       <div className={classes.column}>
         <header className={classes.header}>
           <div>
             <h1 className={classes.title}>{title}</h1>
-            <p className={classes.updated}>Last updated: {updated}</p>
+            <p className={classes.updated}>{t("lastUpdated", { date: updated })}</p>
           </div>
           <Link href="/" className={classes.footerLink}>
-            ← Back to GLU
+            {t("backToGlu")}
           </Link>
         </header>
 
+        {notice ? (
+          <div className={classes.notice} data-testid="translation-notice">
+            {notice}
+          </div>
+        ) : null}
+
         <DocumentProse intro={intro} sections={sections} />
 
-        <nav className={classes.footer} aria-label="Legal">
+        <nav className={classes.footer} aria-label={t("footerAriaLabel")}>
           {/* ADR 31: the gate is one-way, so this footer is how the pitch stays
               reachable to someone who skipped it — and how it gets shared. */}
           <Link href="/welcome" className={classes.footerLink}>
-            Welcome
+            {t("welcome")}
           </Link>
           <Link href="/docs" className={classes.footerLink}>
-            Documentation
+            {t("documentation")}
           </Link>
           <Link href="/privacy" className={classes.footerLink}>
-            Privacy Policy
+            {t("privacy")}
           </Link>
           <Link href="/terms" className={classes.footerLink}>
-            Terms of Service
+            {t("terms")}
           </Link>
           <a
             className={classes.footerLink}
@@ -66,7 +79,7 @@ export function LegalPage({ title, updated, intro, sections }: LegalPageProps) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Source on GitHub
+            {t("sourceOnGitHub")}
           </a>
         </nav>
       </div>
@@ -111,7 +124,8 @@ export function DocumentProse({
  * Mantine's (ADR 29).
  */
 export function DocumentUpdated({ updated }: { updated: string }) {
-  return <p className={classes.updated}>Last updated: {updated}</p>;
+  const t = useTranslations("document");
+  return <p className={classes.updated}>{t("lastUpdated", { date: updated })}</p>;
 }
 
 /**

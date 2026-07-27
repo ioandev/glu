@@ -3,6 +3,7 @@
 import { ActionIcon, Drawer, Modal, Skeleton, Stack, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconRefresh } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { TaskCircle } from "./TaskCircle";
 import { useTaskDetail, type TaskDetailState } from "./useTaskDetail";
 import classes from "./todoist.module.css";
@@ -32,6 +33,7 @@ export function TaskDetail({
   const fullScreen = useMediaQuery("(max-width: 48em)") ?? false;
   const detail = useTaskDetail(taskId, refreshNonce);
   const opened = taskId !== null;
+  const t = useTranslations("todoist");
 
   const body = (
     <TaskDetailBody
@@ -44,9 +46,9 @@ export function TaskDetail({
   const shared = {
     opened,
     onClose,
-    title: "Task",
+    title: t("taskTitle"),
     classNames: { content: classes.detailPanel, header: classes.detailHeader },
-    closeButtonProps: { "aria-label": "Close task" },
+    closeButtonProps: { "aria-label": t("closeTask") },
     transitionProps: { duration: 0 },
   } as const;
 
@@ -73,6 +75,11 @@ export function TaskDetailBody({
   onComplete?: (task: { id: string; title: string }) => void;
   completed?: boolean;
 }) {
+  // Above the phase branches, because hooks must be: React counts the calls,
+  // not the renders that use them.
+  const t = useTranslations("todoist");
+  const tError = useTranslations("errors");
+
   if (detail.phase === "loading") {
     return (
       <Stack gap="sm" data-testid="detail-skeletons">
@@ -86,9 +93,9 @@ export function TaskDetailBody({
   if (detail.phase === "gone") {
     return (
       <Stack gap="sm" data-testid="detail-gone">
-        <Text size="sm">This task no longer exists in Todoist.</Text>
+        <Text size="sm">{t("taskGone")}</Text>
         <button type="button" className={classes.detailAction} onClick={onClose}>
-          Close
+          {t("close")}
         </button>
       </Stack>
     );
@@ -97,9 +104,11 @@ export function TaskDetailBody({
   if (detail.phase === "error" || !detail.task) {
     return (
       <Stack gap="sm" data-testid="detail-error">
-        <Text size="sm">{detail.errorMessage ?? "Could not reach Todoist."}</Text>
+        {/* Never the upstream text (ADR 44): `errorMessage` is `apiFetch`'s
+            internal `GET /path failed`, which is English and is not copy. */}
+        <Text size="sm">{tError("unreachable")}</Text>
         <button type="button" className={classes.detailAction} onClick={detail.refresh}>
-          Retry
+          {t("retry")}
         </button>
       </Stack>
     );
@@ -120,7 +129,7 @@ export function TaskDetailBody({
         <ActionIcon
           variant="subtle"
           size={44}
-          aria-label="Refresh task"
+          aria-label={t("refreshTask")}
           loading={detail.refreshing}
           onClick={detail.refresh}
         >
@@ -137,12 +146,12 @@ export function TaskDetailBody({
       ) : null}
 
       <Text className={classes.sectionHeader} component="div">
-        Comments · oldest first
+        {t("comments")}
       </Text>
 
       {detail.comments.length === 0 ? (
         <Text size="sm" c="dimmed" data-testid="detail-no-comments">
-          No comments yet.
+          {t("noComments")}
         </Text>
       ) : (
         detail.comments.map((comment) => (
@@ -187,7 +196,7 @@ export function TaskDetailBody({
 
       {detail.truncated ? (
         <Text className={classes.truncation} data-testid="detail-truncation">
-          Showing first {detail.cap}
+          {t("showingFirst", { count: detail.cap })}
         </Text>
       ) : null}
     </Stack>

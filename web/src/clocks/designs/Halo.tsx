@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -34,6 +35,8 @@ export function Halo({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
   // The arc shows what is LEFT — the mockup driver's `progress` was elapsed.
   const offset = CIRCUMFERENCE * (1 - p.remainingFraction);
@@ -83,7 +86,7 @@ export function Halo({
             letterSpacing="4"
             fill="var(--clk-muted)"
           >
-            {stateLabel(state).toUpperCase()}
+            {stateLabel(state).toLocaleUpperCase(locale)}
           </text>
         </svg>
         {showSession ? (

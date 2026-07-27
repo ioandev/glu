@@ -1,6 +1,6 @@
 /* The Todoist button is deliberately brand-on-brand: their red, their mark.
    That makes it self-contained for contrast, so it reads identically across all
-   18 clock palettes and both schemes (ADR 11). */
+   every clock palette and both schemes (ADR 11). */
 
 .loginButton {
   display: inline-flex;
@@ -203,10 +203,76 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* ADR 43: the pull gesture does not `preventDefault` the scroll, so the
+     browser has to be told not to run its own rubber-band underneath it. */
+  overscroll-behavior-y: contain;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-right: 4px;
+}
+
+/* --- Pull to refresh (ADR 43) -------------------------------------------- */
+
+.pullHost {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* The indicator lives above the top edge at rest; nothing may show it there. */
+  overflow: hidden;
+  /* Vertical panning stays the browser's — the gesture only ever starts where
+     the list cannot scroll further up, so there is nothing to prevent. */
+  touch-action: pan-y;
+}
+
+.pullIndicator {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  border: var(--glu-border);
+  border-radius: 50%;
+  background: var(--glu-surface);
+  color: var(--glu-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(var(--pull, 0px));
+  opacity: var(--pull-opacity, 0);
+  pointer-events: none;
+}
+
+/* Never while a finger is on it: a transition on a per-frame transform is
+   exactly what makes a pull feel laggy. */
+.pullIndicator:not([data-tracking]) {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+/* Armed — releasing now will refresh. A visible state, not just a number. */
+.pullIndicator[data-armed] {
+  color: var(--glu-accent-text);
+  border-color: var(--glu-accent-text);
+}
+
+.pullIndicator[data-spinning] svg {
+  animation: glu-refresh-spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pullIndicator[data-spinning] svg {
+    animation: none;
+  }
+
+  .pullIndicator:not([data-tracking]) {
+    transition: none;
+  }
 }
 
 .sectionHeader {
@@ -228,6 +294,32 @@
 
 .errorText {
   color: var(--glu-accent-text);
+}
+
+/* ADR 39: the per-section overflow. It sits in the list flow, so it borrows the
+   truncation line's muted typography rather than the card treatment — it is a
+   statement about the section, not another task. The 44 px floor is the touch
+   target (ADR 19); the hover is restated because a module class outranks
+   Mantine's own (ADR 37) and `UnstyledButton` brings none worth keeping. */
+.sectionMore {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px;
+  font-family: var(--glu-label-family);
+  font-size: 13px;
+  color: var(--glu-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--glu-control-radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sectionMore:hover {
+  background: var(--glu-surface);
+  color: var(--glu-page-fg);
 }
 
 .pickerDropdown {
@@ -359,12 +451,19 @@
   gap: 10px;
 }
 
+/* The detail view is the one Todoist surface that is read rather than tapped —
+   a title, a description and comments people copy out — so the app-wide
+   `user-select: none` from `globals.css` is lifted for its text. The task
+   *cards* keep it: those are touch targets, and a long-press that selects the
+   title instead of opening the task is the bug this whole rule exists for. */
 .detailTitle {
   flex: 1;
   font-size: 17px;
   font-weight: 600;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .detailDescription {
@@ -374,6 +473,8 @@
   /* Line breaks preserved; no markdown engine (ADR 13). */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .detailAction {
@@ -392,6 +493,8 @@
   flex-direction: column;
   gap: 5px;
   padding: 11px 13px;
+  -webkit-user-select: text;
+  user-select: text;
   border: var(--glu-border);
   border-radius: var(--glu-radius-card);
   background: var(--glu-surface);

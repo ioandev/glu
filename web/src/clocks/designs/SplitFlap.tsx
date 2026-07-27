@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useTranslations } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -31,6 +32,8 @@ export function SplitFlap({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const t = useTranslations("clock");
   const p = clockProgress(remainingMs, totalMs);
   const digits = [...p.minutes, ...p.seconds];
 
@@ -46,10 +49,10 @@ export function SplitFlap({
           ))}
         </div>
         <div className={classes.center} style={{ gap: "1.2cqmin", height: "auto" }}>
-          <span className={classes.label}>Now departing {"\u00b7"} {stateLabel(state)}</span>
+          <span className={classes.label}>{t("splitFlapLine", { label: stateLabel(state) })}</span>
           {showSession ? (
             <span className={classes.label} data-testid="clock-session">
-              Platform {session}
+              {t("splitFlapPlatform", { session })}
             </span>
           ) : null}
         </div>

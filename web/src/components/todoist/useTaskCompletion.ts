@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { apiFetch } from "@/lib/api";
 import { COMPLETION_UNDO_MS } from "@/store/types";
 
@@ -33,14 +34,17 @@ export interface TaskCompletion {
 export function useTaskCompletion(options: {
   onCompleted?: (taskId: string) => void;
   onUndone?: (taskId: string) => void;
+  /** ADR 35: fires after a failed close reverts, so the focused slot can restore. */
+  onFailed?: (taskId: string) => void;
   /** Displacing a pending time-comment commits it immediately (ADR 14's rule). */
   onDisplaceOther?: () => void;
 } = {}): TaskCompletion {
+  const t = useTranslations("todoist");
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<CompletionUndo | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { onCompleted, onUndone, onDisplaceOther } = options;
+  const { onCompleted, onUndone, onFailed, onDisplaceOther } = options;
 
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -60,6 +64,7 @@ export function useTaskCompletion(options: {
       } catch {
         setCompletingIds((prev) => without(prev, task.id));
         setFailedIds((prev) => new Set(prev).add(task.id));
+        onFailed?.(task.id);
         return;
       }
 
@@ -72,7 +77,7 @@ export function useTaskCompletion(options: {
         // The id stays filtered: the task is genuinely gone from this source.
       }, COMPLETION_UNDO_MS);
     },
-    [onCompleted, onDisplaceOther],
+    [onCompleted, onFailed, onDisplaceOther],
   );
 
   const undo = useCallback(async () => {
@@ -86,13 +91,13 @@ export function useTaskCompletion(options: {
     } catch {
       // Rare: deleted upstream meanwhile. Say so on the bar; the gone-state
       // paths reconcile from there. Never an error screen.
-      setPending({ ...entry, error: "Could not undo" });
+      setPending({ ...entry, error: t("couldNotUndo") });
       return;
     }
     setCompletingIds((prev) => without(prev, entry.taskId));
     setPending(null);
     onUndone?.(entry.taskId);
-  }, [pending, onUndone]);
+  }, [pending, onUndone, t]);
 
   const dismiss = useCallback(() => {
     clearTimer();

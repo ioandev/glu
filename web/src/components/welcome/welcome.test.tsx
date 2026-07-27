@@ -3,7 +3,16 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { initialPersistedState, resetGluStore, useGluStore } from "@/store/gluStore";
 import { blobKey, CURRENT_BLOB_VERSION } from "@/store/storage";
-import { WELCOME_CTA, WELCOME_HEADLINE } from "./WelcomeSections";
+import en from "@/locales/en";
+import { intlWrapper } from "@/test/intl";
+
+/*
+ * The English catalog is the source of these strings now (ADR 44), so the
+ * assertions read them from it rather than from a constant that no longer
+ * exists — same property as before: the test cannot drift from the copy.
+ */
+const WELCOME_CTA = en.welcome.cta;
+const WELCOME_HEADLINE = en.welcome.headline;
 import { WelcomeGate } from "./WelcomeGate";
 
 /**
@@ -39,7 +48,7 @@ beforeEach(() => {
 describe("welcome gate (ADR 31)", () => {
   it("renders nothing before the store has hydrated", () => {
     hydrated = false;
-    const { container } = render(<WelcomeGate />);
+    const { container } = render(<WelcomeGate />, { wrapper: intlWrapper });
 
     // Not the welcome, and — the point of the branch — not a frame of it in
     // front of the app for someone who has been here a hundred times.
@@ -47,7 +56,7 @@ describe("welcome gate (ADR 31)", () => {
   });
 
   it("shows the welcome, and no app, on a first visit", () => {
-    render(<WelcomeGate />);
+    render(<WelcomeGate />, { wrapper: intlWrapper });
 
     expect(screen.getByRole("heading", { level: 1, name: WELCOME_HEADLINE })).toBeVisible();
     expect(screen.getByRole("button", { name: WELCOME_CTA })).toBeVisible();
@@ -56,7 +65,7 @@ describe("welcome gate (ADR 31)", () => {
 
   it("shows the app, and no welcome, once entered", () => {
     act(() => store().enterApp());
-    render(<WelcomeGate />);
+    render(<WelcomeGate />, { wrapper: intlWrapper });
 
     expect(screen.getByTestId("app-shell")).toBeVisible();
     expect(screen.queryByRole("heading", { level: 1, name: WELCOME_HEADLINE })).toBeNull();
@@ -64,7 +73,7 @@ describe("welcome gate (ADR 31)", () => {
 
   it("the call to action swaps the welcome for the app, in place", async () => {
     const user = userEvent.setup();
-    render(<WelcomeGate />);
+    render(<WelcomeGate />, { wrapper: intlWrapper });
 
     await user.click(screen.getByRole("button", { name: WELCOME_CTA }));
 
@@ -96,7 +105,7 @@ describe("welcome gate (ADR 31)", () => {
     // Rendered directly: the gate itself shows nothing in this state, and the
     // button is what is being tested.
     const { EnterAppButton } = await import("./EnterAppButton");
-    render(<EnterAppButton />);
+    render(<EnterAppButton />, { wrapper: intlWrapper });
 
     await user.click(screen.getByRole("button", { name: WELCOME_CTA }));
 
@@ -110,7 +119,7 @@ describe("welcome gate (ADR 31)", () => {
 
   it("the navigating variant is a link, so entering from /glu/welcome moves", async () => {
     const { EnterAppButton } = await import("./EnterAppButton");
-    render(<EnterAppButton navigateTo="/" />);
+    render(<EnterAppButton navigateTo="/" />, { wrapper: intlWrapper });
 
     const cta = screen.getByRole("link", { name: WELCOME_CTA });
     // The route-relative href. `next/link` is what turns this into `/glu/…`,

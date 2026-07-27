@@ -9,6 +9,10 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
+import { useLocale, useTranslations } from "next-intl";
+import { AlertSoundRows } from "@/components/settings/AlertSoundRows";
+import { LanguageRow } from "@/components/settings/LanguageRow";
+import { NotificationRow } from "@/components/settings/NotificationRow";
 import { TodoistLogin } from "@/components/todoist/TodoistLogin";
 import {
   activeEnvironmentKeys,
@@ -18,7 +22,13 @@ import {
 } from "@/lib/timeComment";
 import { useGluStore } from "@/store/gluStore";
 import { useTodoistAuth } from "@/store/todoistAuth";
-import { COMMENT_THRESHOLD_CHOICES, resolveCommentThresholdMinutes } from "@/store/types";
+import {
+  COMMENT_THRESHOLD_CHOICES,
+  resolveCommentThresholdMinutes,
+  resolveSectionItemLimit,
+  SECTION_ITEM_LIMIT_ALL,
+  SECTION_ITEM_LIMIT_CHOICES,
+} from "@/store/types";
 import classes from "./settings.module.css";
 
 /**
@@ -30,6 +40,11 @@ import classes from "./settings.module.css";
  * app state.
  */
 export function SettingsContent() {
+  const t = useTranslations("settings");
+  const tLanguage = useTranslations("language");
+  // The sample environment's two names come from the chips' own namespace, so
+  // the note can never drift from what the toggles are called (ADR 44).
+  const tEnv = useTranslations("environment");
   const status = useTodoistAuth((s) => s.status);
   const name = useTodoistAuth((s) => s.name);
   const logout = useTodoistAuth((s) => s.logout);
@@ -41,6 +56,8 @@ export function SettingsContent() {
   const setCommentEnvironment = useGluStore((s) => s.setCommentEnvironment);
   const commentThresholdMinutes = useGluStore((s) => s.commentThresholdMinutes);
   const setCommentThresholdMinutes = useGluStore((s) => s.setCommentThresholdMinutes);
+  const sectionItemLimit = useGluStore((s) => s.sectionItemLimit);
+  const setSectionItemLimit = useGluStore((s) => s.setSectionItemLimit);
   const environment = useGluStore((s) => s.environment);
   const selectedDuration = useGluStore((s) => s.selectedDuration);
 
@@ -52,17 +69,31 @@ export function SettingsContent() {
   const keys = activeEnvironmentKeys(environment);
   const sampled = keys.length === 0;
   const minutes = previewMinutes(selectedDuration);
-  const decorated = previewTimeComment(minutes, sampled ? SAMPLE_ENVIRONMENT : keys);
-  const plain = previewTimeComment(minutes, []);
+  // The preview is only honest if it is in the language the server will write
+  // in, which is the one the app is being read in (ADR 44).
+  const commentLocale = useLocale();
+  const decorated = previewTimeComment(minutes, sampled ? SAMPLE_ENVIRONMENT : keys, commentLocale);
+  const plain = previewTimeComment(minutes, [], commentLocale);
 
   // Resolved on read as well as on write (ADR 28): a hand-edited blob must not
   // leave the ladder with nothing selected.
   const threshold = resolveCommentThresholdMinutes(commentThresholdMinutes);
+  const itemLimit = resolveSectionItemLimit(sectionItemLimit);
 
   return (
     <Stack gap="lg" className={classes.sections}>
-      <section aria-label="Todoist settings">
-        <Text className={classes.sectionTitle}>Todoist</Text>
+      {/* ADR 44, and deliberately the **first** section: it is the one setting a
+          user might need while unable to read any of the others, so it must be
+          findable without reading the panel. */}
+      <section aria-label={tLanguage("sectionAriaLabel")}>
+        <Text className={classes.sectionTitle}>{tLanguage("sectionTitle")}</Text>
+        <Divider className={classes.divider} />
+
+        <LanguageRow />
+      </section>
+
+      <section aria-label={t("todoistAriaLabel")}>
+        <Text className={classes.sectionTitle}>{t("todoistTitle")}</Text>
         <Divider className={classes.divider} />
 
         {/* `unknown` renders neither state: no logged-in chrome may flash while
@@ -72,12 +103,12 @@ export function SettingsContent() {
         ) : status === "in" ? (
           <Group className={classes.row} justify="space-between" wrap="nowrap">
             <Text size="sm" data-testid="settings-account-name">
-              Signed in as {name ?? "your Todoist account"}
+              {t("signedInAs", { name: name ?? t("signedInFallbackName") })}
             </Text>
             {/* No confirmation: re-login is one tap, so this guards an
                 inconvenience, not a loss (contrast ADR 05's New day). */}
             <UnstyledButton className={classes.action} onClick={() => void logout()}>
-              Log out
+              {t("logOut")}
             </UnstyledButton>
           </Group>
         ) : (
@@ -89,8 +120,40 @@ export function SettingsContent() {
         )}
       </section>
 
-      <section aria-label="Screen settings">
-        <Text className={classes.sectionTitle}>Screen</Text>
+      {/* ADR 39. Its own section rather than a row under Todoist: that one is
+          about the account, this one is about the list. */}
+      <section aria-label={t("tasksAriaLabel")}>
+        <Text className={classes.sectionTitle}>{t("tasksTitle")}</Text>
+        <Divider className={classes.divider} />
+
+        <div className={classes.field} data-testid="setting-section-item-limit">
+          <Text component="span" className={classes.fieldLabel} id="section-item-limit-label">
+            {t("sectionItemLimitLabel")}
+          </Text>
+          <Text component="span" className={classes.fieldDescription}>
+            {t("sectionItemLimitDescription")}
+          </Text>
+          <SegmentedControl
+            fullWidth
+            className={classes.segmented}
+            aria-labelledby="section-item-limit-label"
+            value={String(itemLimit)}
+            onChange={(value) => setSectionItemLimit(Number(value))}
+            data={SECTION_ITEM_LIMIT_CHOICES.map((choice) => ({
+              value: String(choice),
+              // The 0 rung is the *absence* of a ceiling, so it says so in
+              // words — "0" on a limit reads as "show nothing".
+              label:
+                choice === SECTION_ITEM_LIMIT_ALL
+                  ? t("sectionItemLimitAll")
+                  : String(choice),
+            }))}
+          />
+        </div>
+      </section>
+
+      <section aria-label={t("screenAriaLabel")}>
+        <Text className={classes.sectionTitle}>{t("screenTitle")}</Text>
         <Divider className={classes.divider} />
 
         <Stack gap="xs">
@@ -99,12 +162,12 @@ export function SettingsContent() {
           <Switch
             className={classes.switch}
             size="md"
-            label="Stay awake on the website"
-            description="Keeps the screen on for as long as GLU is open, timer or no timer."
+            label={t("stayAwakeAlwaysLabel")}
+            description={t("stayAwakeAlwaysDescription")}
             /* Mantine's `<label>` wraps the description too, so without this the
                accessible name swallows it — and `aria-describedby` then reads it
                out a second time. */
-            aria-label="Stay awake on the website"
+            aria-label={t("stayAwakeAlwaysLabel")}
             checked={stayAwakeAlways}
             onChange={(event) => setStayAwakeAlways(event.currentTarget.checked)}
             data-testid="setting-stay-awake-always"
@@ -112,9 +175,9 @@ export function SettingsContent() {
           <Switch
             className={classes.switch}
             size="md"
-            label="Stay awake when the timer is running"
-            description="Keeps it on during a run, and for five minutes after it pauses or ends."
-            aria-label="Stay awake when the timer is running"
+            label={t("stayAwakeRunningLabel")}
+            description={t("stayAwakeRunningDescription")}
+            aria-label={t("stayAwakeRunningLabel")}
             checked={stayAwakeWhileRunning}
             onChange={(event) => setStayAwakeWhileRunning(event.currentTarget.checked)}
             data-testid="setting-stay-awake-running"
@@ -122,8 +185,21 @@ export function SettingsContent() {
         </Stack>
       </section>
 
-      <section aria-label="Time comment settings">
-        <Text className={classes.sectionTitle}>Time comments</Text>
+      <section aria-label={t("alertsAriaLabel")}>
+        <Text className={classes.sectionTitle}>{t("alertsTitle")}</Text>
+        <Divider className={classes.divider} />
+
+        {/* First in the section (ADR 41 amendment). It shipped last, on the
+            argument that the sound reaches everyone and the notification only
+            the person who walked away — and the owner could not find it, buried
+            under a nine-button grid in a long modal. A row nobody finds is a
+            row nobody has. Discoverability beats that ordering. */}
+        <NotificationRow />
+        <AlertSoundRows />
+      </section>
+
+      <section aria-label={t("commentsAriaLabel")}>
+        <Text className={classes.sectionTitle}>{t("commentsTitle")}</Text>
         <Divider className={classes.divider} />
 
         <Stack gap="xs">
@@ -132,10 +208,10 @@ export function SettingsContent() {
               which stay adjacent, because the previews belong to the switch. */}
           <div className={classes.field} data-testid="setting-comment-threshold">
             <Text component="span" className={classes.fieldLabel} id="comment-threshold-label">
-              Minimum time to log
+              {t("thresholdLabel")}
             </Text>
             <Text component="span" className={classes.fieldDescription}>
-              A run shorter than this posts no comment on the focused task.
+              {t("thresholdDescription")}
             </Text>
             <SegmentedControl
               fullWidth
@@ -147,7 +223,7 @@ export function SettingsContent() {
               onChange={(value) => setCommentThresholdMinutes(Number(value))}
               data={COMMENT_THRESHOLD_CHOICES.map((choice) => ({
                 value: String(choice),
-                label: `${choice} min`,
+                label: t("minutesShort", { count: choice }),
               }))}
             />
           </div>
@@ -155,9 +231,9 @@ export function SettingsContent() {
           <Switch
             className={classes.switch}
             size="md"
-            label="Say how you worked"
-            description="Adds your environment toggles to the comment GLU posts on the focused task."
-            aria-label="Say how you worked"
+            label={t("sayHowYouWorkedLabel")}
+            description={t("sayHowYouWorkedDescription")}
+            aria-label={t("sayHowYouWorkedLabel")}
             checked={commentEnvironment}
             onChange={(event) => setCommentEnvironment(event.currentTarget.checked)}
             data-testid="setting-comment-environment"
@@ -168,14 +244,14 @@ export function SettingsContent() {
               visible — the switch's effect is the difference between them. */}
           <div className={classes.previews} data-testid="comment-previews">
             <Preview
-              label="On"
+              label={t("previewOn")}
               text={decorated}
               active={commentEnvironment}
               sampled={sampled}
               testId="comment-preview-on"
             />
             <Preview
-              label="Off"
+              label={t("previewOff")}
               text={plain}
               active={!commentEnvironment}
               testId="comment-preview-off"
@@ -186,8 +262,10 @@ export function SettingsContent() {
               a small lie about what the next comment will say. */}
           {sampled && (
             <Text size="xs" c="dimmed" data-testid="comment-preview-note">
-              No environment toggles are on yet — the example shows what Music
-              and Headphones would look like.
+              {t("previewSampleNote", {
+                first: tEnv("music"),
+                second: tEnv("headphones"),
+              })}
             </Text>
           )}
         </Stack>
@@ -215,6 +293,7 @@ function Preview({
   sampled?: boolean;
   testId: string;
 }) {
+  const t = useTranslations("settings");
   return (
     <div
       className={`${classes.preview} ${active ? classes.previewActive : ""}`}
@@ -223,7 +302,11 @@ function Preview({
       data-sampled={sampled}
     >
       <span className={classes.previewLabel}>
-        {sampled ? `${label} · Example` : active ? `${label} · Now` : label}
+        {sampled
+          ? t("previewSampled", { label })
+          : active
+            ? t("previewLive", { label })
+            : label}
       </span>
       {/* Long sentences in a narrow modal: they wrap, they never ellipsize. */}
       <span className={classes.previewText} data-testid={`${testId}-text`}>

@@ -2,7 +2,18 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  DEFAULT_ALERT_DURATION_SECONDS,
+  DEFAULT_ALERT_SOUND_ID,
+  resolveAlertDurationSeconds,
+  resolveAlertSound,
+} from "@/lib/alertSounds";
 import { DEFAULT_DURATION_MS, MIN_TOTAL_MS } from "@/lib/time";
+import {
+  DEFAULT_LOCALE_PREFERENCE,
+  resolveLocalePreference,
+  type LocalePreference,
+} from "@/lib/locale";
 import { DEFAULT_CHROME_ID, type ChromeId } from "@/chrome/types";
 import { CLOCKS, DEFAULT_CLOCK_ID, resolveClock } from "@/clocks/registry";
 import type { TodoistSource } from "@/components/todoist/types";
@@ -10,9 +21,12 @@ import { createVersionedKeyStorage, CURRENT_BLOB_VERSION } from "./storage";
 import {
   ARCHIVE_CAP_DAYS,
   DEFAULT_COMMENT_THRESHOLD_MINUTES,
+  DEFAULT_SECTION_ITEM_LIMIT,
   OUTBOX_CAP,
   ENVIRONMENT_KEYS,
+  resolveAlertPromptsUsed,
   resolveCommentThresholdMinutes,
+  resolveSectionItemLimit,
   SOUND_ENVIRONMENT_KEYS,
   type DayRecord,
   type EnvironmentKey,
@@ -82,6 +96,34 @@ export interface GluPersistedState {
   stayAwakeAlways: boolean;
   /** ADR 17: hold it while a run is on the clock, plus the 5-minute grace. */
   stayAwakeWhileRunning: boolean;
+  /**
+   * ADR 40: which of the nine end-of-run sounds plays, and how long GLU keeps
+   * playing it (`0` = the sound's own length, once). Both default to ADR 18's
+   * shipped behaviour, so the rows exist to move off it rather than to
+   * establish it.
+   */
+  alertSoundId: string;
+  alertDurationSeconds: number;
+  /**
+   * ADR 41: how many times GLU has put the browser's notification prompt in
+   * front of this user, unasked. The blob's first **quota** rather than a
+   * preference or a record — three, then the automatic ask stops for good and
+   * Settings is the only remaining door.
+   *
+   * It counts *our attempts*, not their answers: granting or denying moves
+   * `Notification.permission` off `default` and the guard never reaches here,
+   * so in practice this is a dismissal budget. Absent means zero, which is the
+   * correct reading — a blob with no counter has spent no asks.
+   */
+  alertPromptsUsed: number;
+  /**
+   * ADR 41 (amended): GLU's own half of "notify me when a session ends". The
+   * browser permission is the other half and cannot be revoked from script, so
+   * without this the Settings switch could only ever be turned *on* — and a
+   * control with one direction is not a switch. On by default: a granted
+   * permission means the user already said yes.
+   */
+  notifyOnSessionEnd: boolean;
   /** ADR 27: let the time comment say how the run was spent. On by default. */
   commentEnvironment: boolean;
   /**
@@ -89,6 +131,21 @@ export interface GluPersistedState {
    * ADR 14's hard-coded minute, so the shipped behaviour is the default.
    */
   commentThresholdMinutes: number;
+  /**
+   * ADR 39: how many tasks one section run renders before the rest hide behind
+   * `+N more`. `SECTION_ITEM_LIMIT_ALL` (0) is no ceiling, and is the default.
+   */
+  sectionItemLimit: number;
+  /**
+   * ADR 44: the chosen language, or `"auto"` to keep following the browser.
+   *
+   * **A mirror, not a source.** The language that actually renders comes from
+   * the `glu-locale` cookie, resolved on the server before first paint — this
+   * field cannot drive rendering, because `skipHydration: true` means it does
+   * not exist yet when the page paints. It is here so the Settings row can show
+   * which option is selected, and so the choice survives a cleared cookie.
+   */
+  locale: LocalePreference;
   /** ADR 12: the chosen task source. Survives logout (ADR 19). */
   todoistSource: TodoistSource | null;
   /** ADR 14: the pinned task. Survives logout (ADR 19). */
@@ -137,9 +194,29 @@ export interface GluState extends GluPersistedState {
   enterApp: () => void;
   setStayAwakeAlways: (value: boolean) => void;
   setStayAwakeWhileRunning: (value: boolean) => void;
+  /** Both store resolved values: an unknown id never reaches the blob. */
+  setAlertSoundId: (id: string) => void;
+  setAlertDurationSeconds: (seconds: number) => void;
+  /**
+   * ADR 41, one-way: GLU has just raised the notification prompt by itself.
+   * Never reset — not by "New day", not by logout, not by a fresh run.
+   */
+  noteAlertPrompt: () => void;
+  /** ADR 41 (amended): GLU's own mute for session-end notifications. */
+  setNotifyOnSessionEnd: (value: boolean) => void;
   setCommentEnvironment: (value: boolean) => void;
   /** Stores a resolved value: an off-ladder minute never reaches the blob. */
   setCommentThresholdMinutes: (minutes: number) => void;
+  /** ADR 39, same rule: an off-ladder limit never reaches the blob. */
+  setSectionItemLimit: (limit: number) => void;
+  /**
+   * ADR 44, same rule: an unknown locale never reaches the blob.
+   *
+   * This writes the *mirror* only. The cookie is what actually changes the
+   * language, and `LanguageRow` writes both — see the comment there for why the
+   * store cannot own the cookie.
+   */
+  setLocalePreference: (preference: string) => void;
   setTodoistSource: (source: TodoistSource | null) => void;
   setFocusedTask: (task: FocusedTask | null) => void;
   enqueueComment: (entry: OutboxEntry) => void;
@@ -189,6 +266,15 @@ export const initialPersistedState = (): GluPersistedState => ({
   // does. Both toggles exist to move off that default, not to establish it.
   stayAwakeAlways: false,
   stayAwakeWhileRunning: true,
+  // ADR 40: the default *is* ADR 18's chime, played once — nobody who never
+  // opens the row hears a change.
+  alertSoundId: DEFAULT_ALERT_SOUND_ID,
+  alertDurationSeconds: DEFAULT_ALERT_DURATION_SECONDS,
+  // ADR 41: a fresh profile has spent nothing, and so has every blob written
+  // before the field existed.
+  alertPromptsUsed: 0,
+  // The permission is the gate; this is only GLU's own mute, so it starts open.
+  notifyOnSessionEnd: true,
   // ADR 27's owner call: the data already exists, it is the user's own, and it
   // goes to the user's own task — so the comment says how the run was spent
   // unless they say otherwise.
@@ -197,6 +283,13 @@ export const initialPersistedState = (): GluPersistedState => ({
   // one minute, not to establish it (the ADR 17 pattern for a setting that
   // makes existing behaviour adjustable).
   commentThresholdMinutes: DEFAULT_COMMENT_THRESHOLD_MINUTES,
+  // ADR 39: All. The row exists to put a ceiling on a long section, not to
+  // establish one for everybody who never opens it.
+  sectionItemLimit: DEFAULT_SECTION_ITEM_LIMIT,
+  // ADR 44: follow the browser until told otherwise. Absent from every blob
+  // written before this ADR, which reads as Automatic — the behaviour those
+  // users already had.
+  locale: DEFAULT_LOCALE_PREFERENCE,
   todoistSource: null,
   focusedTask: null,
   outbox: [],
@@ -530,10 +623,28 @@ export const useGluStore = create<GluState>()(
 
       setStayAwakeWhileRunning: (value) => set({ stayAwakeWhileRunning: value }),
 
+      setAlertSoundId: (id) => set({ alertSoundId: resolveAlertSound(id).id }),
+
+      setAlertDurationSeconds: (seconds) =>
+        set({ alertDurationSeconds: resolveAlertDurationSeconds(seconds) }),
+
+      // Resolved on the way in as well as on the way out: an increment off a
+      // corrupt value must land on 1, not on `NaN` (ADR 41).
+      noteAlertPrompt: () =>
+        set((state) => ({ alertPromptsUsed: resolveAlertPromptsUsed(state.alertPromptsUsed) + 1 })),
+
+      setNotifyOnSessionEnd: (value) => set({ notifyOnSessionEnd: value }),
+
       setCommentEnvironment: (value) => set({ commentEnvironment: value }),
 
       setCommentThresholdMinutes: (minutes) =>
         set({ commentThresholdMinutes: resolveCommentThresholdMinutes(minutes) }),
+
+      setSectionItemLimit: (limit) =>
+        set({ sectionItemLimit: resolveSectionItemLimit(limit) }),
+
+      setLocalePreference: (preference) =>
+        set({ locale: resolveLocalePreference(preference) }),
 
       setTodoistSource: (source) => set({ todoistSource: source }),
 
@@ -620,8 +731,14 @@ export const useGluStore = create<GluState>()(
         hasEnteredApp: state.hasEnteredApp,
         stayAwakeAlways: state.stayAwakeAlways,
         stayAwakeWhileRunning: state.stayAwakeWhileRunning,
+        alertSoundId: state.alertSoundId,
+        alertDurationSeconds: state.alertDurationSeconds,
+        alertPromptsUsed: state.alertPromptsUsed,
+        notifyOnSessionEnd: state.notifyOnSessionEnd,
         commentEnvironment: state.commentEnvironment,
         commentThresholdMinutes: state.commentThresholdMinutes,
+        sectionItemLimit: state.sectionItemLimit,
+        locale: state.locale,
         todoistSource: state.todoistSource,
         focusedTask: state.focusedTask,
         outbox: state.outbox,

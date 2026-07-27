@@ -1,4 +1,5 @@
-import { ClockFrame } from "../ClockFrame";
+import { useTranslations } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -36,6 +37,11 @@ export function Terminal({
   state,
   accent,
 }: ClockProps) {
+  // The only design that used to print the raw `TimerStatus` union — "running",
+  // "idle" — straight into the UI. It goes through the shared label now, which
+  // is both translated and the same word every other face uses (ADR 44).
+  const stateLabel = useStateLabel();
+  const t = useTranslations("clock");
   const p = clockProgress(remainingMs, totalMs);
   const filled = Math.round(p.elapsedFraction * BAR_WIDTH);
   const bar = `[${"\u2588".repeat(filled)}${"\u2591".repeat(BAR_WIDTH - filled)}] ${Math.round(
@@ -50,14 +56,14 @@ export function Terminal({
         </span>
         {showSession ? (
           <span className={designs.termDim} data-testid="clock-session">
-            session {session} {"\u00b7"} {state}
+            {t("terminalSession", { session, state: stateLabel(state) })}
           </span>
         ) : null}
         <span className={classes.time} style={{ fontSize: "12cqmin", margin: "3cqmin 0 1cqmin" }}>
           {p.time}
         </span>
         <span style={{ fontSize: "3.4cqmin", letterSpacing: "0.06em" }}>{bar}</span>
-        <span className={designs.termDim}>^C to abandon {"\u00b7"} s to stop</span>
+        <span className={designs.termDim}>{t("terminalHint")}</span>
       </div>
     </ClockFrame>
   );

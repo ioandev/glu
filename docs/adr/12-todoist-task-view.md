@@ -2,7 +2,70 @@
 
 - Status: Implemented (deviations noted)
 - Date: 2026-07-23
-- Amended: 2026-07-23 — cards gain a focus button and the list excludes the
+- Amended: 2026-07-26 (ADR 39) — **a section can now be capped, and the two
+  view branches became one loop.** `TaskList` no longer chooses between
+  `groupBySection` and `labelSections` at render time: `sectionRuns` in
+  `components/todoist/types.ts` folds either view into the same
+  `{ key, header, tasks }[]`, and the render walks that. Both grouping
+  functions and every rule above are untouched — the split is now a data
+  question, which is what lets ADR 39's per-section ceiling be written once
+  instead of once per source type. The 200-task `Showing first N` line is a
+  different statement and stays exactly as specified here.
+- Amended: 2026-07-26 — **section names now show for filter and label
+  sources, not only projects.** The original decision ("Sections as a
+  selectable source — Rejected") only ever settled *promoting* sections to a
+  pickable source type; it never said filter/label results should stay
+  unlabelled, and a user-filed Todoist task
+  ("Sections for the filter or projects — the names of the sections are not
+  shown") confirms that reading was surprising in practice. Mechanism: the
+  existing `GET /glu/api/todoist/sections` route already returns **every**
+  section across every project when called with no `projectId` (Todoist's own
+  API behaviour — `project_id` unset means unfiltered), so `useTodoistList`
+  now fetches it unconditionally instead of only for `type === "project"`; no
+  new proxy route, no allowlist change. Filter/label results are **not**
+  re-bucketed by section the way a project's are — ADR 12's "we never re-sort"
+  rule and the 2026-07-25 multi-view-union deviation both hold task order as
+  load-bearing, and a filter/label can span several projects' worth of
+  sections with no natural single ordering to re-bucket into. Instead,
+  `labelSections()` walks the already-ordered task list and prints one running
+  header wherever the section changes from the previous task (including into
+  or out of "no section") — same visual header as the project view, zero
+  reordering. A task whose section isn't in the merged list (its project
+  wasn't part of the fetch batch some other way, or the section was deleted
+  between the two requests) silently falls back to no header — the section
+  boundary just doesn't render for that task, matching the existing "less
+  specific" UX-cost precedent this ADR already accepts elsewhere (the invalid-
+  filter deviation above). `web/src/components/docs/DocsSections.tsx` updated
+  in the same session (ADR 29).
+- Amended: 2026-07-26 — the header above adds the **project name**:
+  `"<project> / <section>"`, not a bare section name. A section id is
+  Todoist-unique to one project, but the *name* on its own is ambiguous the
+  moment a filter or label spans more than one project ("Today" could be a
+  section in three different projects) — the boundary-detection rule is
+  unchanged, only the rendered string. `UiTask` gains `projectId` (both
+  `backend/todoistRoutes.ts` and `web/src/components/todoist/types.ts`,
+  mapped straight from `RawTask.project_id`); `useTodoistList` adds a third
+  parallel fetch, `GET /glu/api/todoist/projects` (already allowlisted, ADR
+  12's original five), skipped for a project source, which already knows its
+  own name from `source.name`. When a task's `projectId` isn't in that list —
+  same "less specific, not broken" posture as an unknown section — the header
+  falls back to the source type's own name, `"Filter / <section>"` or
+  `"Label / <section>"`.
+- Amended: 2026-07-26 — **a no-section task now gets a header too, showing
+  just its project** (`"Inbox"`, not `"Inbox / <nothing>"` and not silence).
+  The first draft only emitted a header when the task carried a section id,
+  which read as correct until checked against Todoist's own filter/label
+  view: it groups by project even when a group has no section — an Inbox
+  task with no section still sits under an "Inbox" header — so a bare
+  no-section run being unlabelled was a gap, not a feature (spotted from a
+  screenshot of a "Complex Filter" mixing an Inbox task with a sectioned
+  Project2 task; the Inbox one rendered with no header at all).
+  `labelSections()`'s run-boundary key is now the **(project, section) pair**
+  instead of section alone, so a boundary fires on a project change even when
+  neither side has a section, and every boundary — sectioned or not — gets a
+  label: `"<project> / <section>"` with one, `"<project>"` without. An
+  unknown section degrades to the project name alone rather than to no
+  header, matching the unknown-project fallback already in place.
   focused task (**ADR 14**); tap-to-open wired by **ADR 13**.
 - Amended: 2026-07-25 — the "manual refresh button" this ADR always specified
   is now a real control in the header, left of the tools icon; it had only ever
@@ -12,6 +75,12 @@
   spins — instead of collapsing to skeletons; a source *switch* still shows
   skeletons, since that content is genuinely different. Same fetch path, same
   no-polling rule.
+- Amended: 2026-07-26 (**ADR 43**) — the list has a **fourth freshness
+  trigger**: pulling it down with a finger. It resolves to the same `reload()`
+  and the same `refreshing` flag as the header button above, so the
+  revalidate-in-place rule and the no-polling rule are both untouched. The
+  gesture is an enhancement and not an affordance — its indicator is
+  `aria-hidden`, and the button remains the accessible path.
 
 - Amended: 2026-07-25 — **below `sm` the source picker is a modal, not a
   popover.** The one popup this ADR specified was written for the tablet, where
@@ -48,7 +117,10 @@
   top-level commas (parentheses and quotes excluded), fetches each view (four
   at a time, at most `FILTER_VIEW_CAP` = 20) and unions them **in view order**,
   first occurrence winning, still capped at 200 with `truncated` set when
-  anything is left out. Neither bug could surface in tests, because every test
+  anything is left out. (**"In view order, which is the order Todoist itself
+  shows" was wrong twice over** — Todoist stacks the views *and* sorts within
+  each. ADR 34 supersedes it: the union is sorted. First-occurrence-wins still
+  decides which copy of a duplicated task survives.) Neither bug could surface in tests, because every test
   mocks the upstream — this is what the HUMAN-TODO real-account check existed
   to catch.
 - Deviation (2026-07-25, amendment): a multi-view filter renders as **one flat
@@ -136,8 +208,10 @@ task view fills the reserved region beneath it, beside ADR 11's account chip.
   is not v1), and **one ellipsized line of description** when present, no
   row reserved when absent. Card height ≥44 px; visually pressable, inert
   until ADR 13.
-- **Task order is Todoist's order** (`child_order` within sections; API
-  order for filters/labels) — we never re-sort; the user's Todoist
+- **Task order is Todoist's order** (`child_order` within sections; ~~API
+  order for filters/labels~~ — **superseded by ADR 34**: `/tasks/filter`
+  returns no defined order and Todoist's own apps sort client-side, so the
+  proxy now reproduces that sort for filters and labels) — the user's Todoist
   arrangement is the arrangement.
 - **The list scrolls internally** inside the reserved area at ≥`sm` (the
   page-no-scroll contract holds); below `sm` it joins ADR 08's stacked flow

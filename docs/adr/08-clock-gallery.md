@@ -62,6 +62,12 @@
   deleted rather than left unused; the clock stories now carry the
   idle/running/paused/finished state coverage ADR 03 asked of the timer panel.
 
+> **Amended 2026-07-26 by [ADR 42](42-second-clock-set.md) and
+> [ADR 45](45-third-clock-set.md).** The gallery now flips through eighty-six
+> designs, so this ADR's own "if the roster grows past ~25, a picker" condition
+> is live. Numbers below are records of the first set; the
+> live count is `CLOCK_COUNT`.
+
 ## Context
 
 ADR 07 delivers 18 pure clock components, a registry, and per-clock

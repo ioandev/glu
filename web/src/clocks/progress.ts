@@ -19,8 +19,8 @@ export interface ClockProgress {
 
 /**
  * Fill direction is decided **once, here**. The design-canvas driver treats its
- * `progress` prop as *elapsed*; GLU's source of truth is *remaining*, and 18
- * hand-rolled inversions is how off-by-one-direction bugs ship (ADR 07).
+ * `progress` prop as *elapsed*; GLU's source of truth is *remaining*, and one
+ * hand-rolled inversion per design is how off-by-one-direction bugs ship (ADR 07).
  *
  * The split of resolutions is decided here too (amended 2026-07-25): the
  * fractions are continuous in milliseconds so geometry moves every frame, the

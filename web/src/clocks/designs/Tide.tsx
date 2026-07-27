@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useLocale } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -24,6 +25,8 @@ export const tideTheme: ClockTheme = {
 };
 
 export function Tide({ remainingMs, totalMs, state, accent }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const locale = useLocale();
   const p = clockProgress(remainingMs, totalMs);
 
   return (
@@ -55,7 +58,7 @@ export function Tide({ remainingMs, totalMs, state, accent }: ClockProps) {
           {p.time}
         </span>
         <span className={designs.mono} style={{ fontSize: "3cqmin", letterSpacing: "0.3em" }}>
-          {stateLabel(state, "Filling \u00b7 focus").toUpperCase()}
+          {stateLabel(state, "fillingFocus").toLocaleUpperCase(locale)}
         </span>
       </div>
     </ClockFrame>

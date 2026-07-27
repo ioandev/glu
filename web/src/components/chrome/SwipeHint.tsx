@@ -2,10 +2,9 @@
 
 import { ActionIcon } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
+import { useTranslations } from "next-intl";
 import { useGluStore } from "@/store/gluStore";
 import classes from "./swipeHint.module.css";
-
-export const SWIPE_HINT_TEXT = "Swipe the clock to switch designs";
 
 /**
  * The gallery's one-time discovery hint (ADR 08 amendment).
@@ -21,19 +20,20 @@ export const SWIPE_HINT_TEXT = "Swipe the clock to switch designs";
  * the gesture it teaches would be its own bug.
  */
 export function SwipeHint() {
+  const t = useTranslations("chrome");
   const dismissed = useGluStore((s) => s.swipeHintDismissed);
   const dismiss = useGluStore((s) => s.dismissSwipeHint);
 
   if (dismissed) return null;
 
   return (
-    <aside className={classes.hint} aria-label="Tip" data-testid="swipe-hint">
-      <span className={classes.text}>{SWIPE_HINT_TEXT}</span>
+    <aside className={classes.hint} aria-label={t("tip")} data-testid="swipe-hint">
+      <span className={classes.text}>{t("swipeHint")}</span>
       <ActionIcon
         className={classes.close}
         variant="subtle"
         size={44}
-        aria-label="Dismiss tip"
+        aria-label={t("dismissTip")}
         onClick={dismiss}
       >
         <IconX size={18} />

@@ -1,7 +1,19 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import en from "@/locales/en";
+
+/*
+ * `pageMetadata` reads the request's locale (ADR 44), which only exists inside
+ * a real request. Stubbing the two server helpers keeps these assertions unit
+ * tests — they are about the *shape* Next receives, not about the language.
+ * `e2e/metadata.spec.ts` is what checks the language, against a real response.
+ */
+vi.mock("next-intl/server", () => ({
+  getLocale: async () => "en",
+  getTranslations: async () => (key: keyof typeof en.meta) => en.meta[key],
+}));
 import {
   BASE_PATH,
   METADATA_BASE,
@@ -72,32 +84,41 @@ describe("copy", () => {
   });
 });
 
+/** Mirrors `META_KEYS` in the module under test. */
+const DESCRIPTION_KEY = {
+  "/": "homeDescription",
+  "/welcome": "welcomeDescription",
+  "/privacy": "privacyDescription",
+  "/terms": "termsDescription",
+  "/docs": "docsDescription",
+} as const satisfies Record<SiteRoute, keyof typeof en.meta>;
+
 describe("pageMetadata", () => {
-  it("restates the site-wide Open Graph facts on every route", () => {
+  it("restates the site-wide Open Graph facts on every route", async () => {
     // Next merges Metadata shallowly: a page that exports `openGraph` replaces
     // its parent's object outright, so these cannot live only in the layout.
     for (const route of routes) {
-      const meta = pageMetadata(route);
+      const meta = await pageMetadata(route);
       expect(meta.openGraph).toMatchObject({
         type: "website",
         siteName: "GLU",
         locale: "en_GB",
         url: absoluteUrl(route),
-        description: PAGE_META[route].description,
+        description: en.meta[DESCRIPTION_KEY[route]],
       });
       expect(meta.twitter).toMatchObject({ card: "summary_large_image" });
     }
   });
 
-  it("points the canonical at the route's own absolute URL", () => {
+  it("points the canonical at the route's own absolute URL", async () => {
     for (const route of routes) {
-      expect(pageMetadata(route).alternates?.canonical).toBe(absoluteUrl(route));
+      expect((await pageMetadata(route)).alternates?.canonical).toBe(absoluteUrl(route));
     }
   });
 
-  it("declares no images — the file convention owns og:image and twitter:image", () => {
+  it("declares no images — the file convention owns og:image and twitter:image", async () => {
     for (const route of routes) {
-      const meta = pageMetadata(route);
+      const meta = await pageMetadata(route);
       expect(meta.openGraph).not.toHaveProperty("images");
       expect(meta.twitter).not.toHaveProperty("images");
     }

@@ -89,10 +89,12 @@ to the task's lifecycle (interplay below).
 
 ### Focused-task interplay (the owner-delegated decisions)
 
-- **Completing the focused task keeps it in the slot, shown completed,
+- ~~**Completing the focused task keeps it in the slot, shown completed,
   for the undo window; when the bar expires, it auto-unfocuses** (nothing
   returns to the list — a completed task doesn't belong to the source
-  list anyway). Undo within the window restores focus exactly as it was.
+  list anyway). Undo within the window restores focus exactly as it was.~~
+  **Superseded by ADR 35** (2026-07-26, bug report): the slot vacates on
+  tap; undo — and a failed close — restore focus exactly as it was.
 - **A running timer keeps running.** The run measures *your* attention,
   not the task's lifecycle; complete the task at 12:00 remaining and keep
   working, refocus something else, or stop — your call, not the app's.
@@ -200,7 +202,7 @@ an hour.
 - [x] Undo within 10 s restores the task to the list (stubbed reopen called exactly once); after 10 s the bar dismisses and no reopen fires.
 - [x] A failed close (stubbed 500) reverts the card in place with an error affordance and no undo bar; a failed reopen shows the bar's error text and the list reconciles on next refetch.
 - [x] The circle works identically in the detail header and the focused slot; all three route through one `TaskCircle` (verified by import).
-- [x] Completing the focused task shows it completed in the slot; after the window it auto-unfocuses and the slot returns to empty/hint; undo within the window restores focus and slot exactly.
+- [x] Completing the focused task shows it completed in the slot; after the window it auto-unfocuses and the slot returns to empty/hint; undo within the window restores focus and slot exactly. *(Superseded by ADR 35: the slot now vacates on tap; undo still restores focus exactly.)*
 - [x] A running timer is unaffected by any completion path (remaining keeps decreasing; the no-transition spy passes).
 - [x] Cross-type displacement: run-end comment bar displaced by a completion → the comment posts immediately (stub asserts); completion bar displaced by a run-end comment bar → no reopen fires, comment bar behaves per ADR 14.
 - [x] A refetch landing mid-completion does not resurrect the card (race test with delayed fixture).

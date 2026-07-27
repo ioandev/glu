@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { MouseEvent } from "react";
 import { useGluStore } from "@/store/gluStore";
 import { useHydrated } from "@/hooks/useHydrated";
-import { WELCOME_CTA } from "./WelcomeSections";
+import { useTranslations } from "next-intl";
 import classes from "./welcome.module.css";
 
 /**
@@ -35,6 +35,7 @@ import classes from "./welcome.module.css";
  * it precedes.
  */
 export function EnterAppButton({ navigateTo }: { navigateTo?: string }) {
+  const cta = useTranslations("welcome")("cta");
   const hydrated = useHydrated();
   const enterApp = useGluStore((s) => s.enterApp);
 
@@ -58,14 +59,14 @@ export function EnterAppButton({ navigateTo }: { navigateTo?: string }) {
           enterApp();
         }}
       >
-        {WELCOME_CTA}
+        {cta}
       </Link>
     );
   }
 
   return (
     <button type="button" onClick={() => hydrated && enterApp()} {...shared}>
-      {WELCOME_CTA}
+      {cta}
     </button>
   );
 }

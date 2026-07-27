@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Group } from "@mantine/core";
+import { useTranslations } from "next-intl";
 import { durationOptions } from "@/lib/time";
 import { useGluStore } from "@/store/gluStore";
 import classes from "./timer.module.css";
@@ -19,9 +20,10 @@ import classes from "./timer.module.css";
 export function PresetRow() {
   const selectedDuration = useGluStore((s) => s.selectedDuration);
   const setPreset = useGluStore((s) => s.setPreset);
+  const t = useTranslations("timer");
 
   return (
-    <Group gap="xs" justify="center" wrap="wrap" aria-label="Preset durations">
+    <Group gap="xs" justify="center" wrap="wrap" aria-label={t("presetsAriaLabel")}>
       {durationOptions(selectedDuration).map(({ ms, label, custom }) => {
         const active = selectedDuration === ms;
         return (

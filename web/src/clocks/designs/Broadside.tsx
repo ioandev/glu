@@ -1,4 +1,5 @@
-import { ClockFrame, stateLabel } from "../ClockFrame";
+import { useTranslations } from "next-intl";
+import { ClockFrame, useStateLabel } from "../ClockFrame";
 import { clockProgress } from "../progress";
 import type { ClockProps } from "../types";
 import type { ClockTheme } from "@/theme/palette";
@@ -31,12 +32,14 @@ export function Broadside({
   state,
   accent,
 }: ClockProps) {
+  const stateLabel = useStateLabel();
+  const t = useTranslations("clock");
   const p = clockProgress(remainingMs, totalMs);
 
   return (
     <ClockFrame theme={broadsideTheme} accent={accent} state={state}>
       <div className={classes.pad} style={{ justifyContent: "space-between" }}>
-        <span className={classes.label}>Pomodoro {"\u2014"} {stateLabel(state)}</span>
+        <span className={classes.label}>{t("broadsideLine", { label: stateLabel(state) })}</span>
         <div className={designs.display} style={{ lineHeight: 0.92 }}>
           <div className={classes.time} style={{ fontSize: "30cqmin", color: "var(--clk-ink)" }}>
             {p.minutes}
@@ -65,7 +68,7 @@ export function Broadside({
           </div>
           {showSession ? (
             <span className={classes.label} data-testid="clock-session">
-              Sessions {session}
+              {t("broadsideSessions", { session })}
             </span>
           ) : null}
         </div>

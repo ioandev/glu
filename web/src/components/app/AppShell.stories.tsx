@@ -161,18 +161,24 @@ export const KeyboardShortcuts: Story = {
     await expect(useGluStore.getState().runId).not.toBe(runId);
     await expect(useGluStore.getState().day.sessions).toHaveLength(0);
 
+    // The buttons advertise their keys — the primary only while `p` does
+    // something, which right now it does: the run above is still going (ADR 37).
+    await expect(canvas.getByRole("button", { name: "Pause" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "p",
+    );
+
     await userEvent.keyboard("s");
     await expect(useGluStore.getState().status).toBe("idle");
     await expect(useGluStore.getState().remaining).toBe(20 * MINUTE);
 
-    // The buttons advertise their keys.
     await expect(canvas.getByRole("button", { name: "Stop" })).toHaveAttribute(
       "aria-keyshortcuts",
       "s Control+C",
     );
-    await expect(canvas.getByRole("button", { name: "Pause" })).toHaveAttribute(
+    // Idle: `p` is a no-op, so the primary claims no shortcut.
+    await expect(canvas.getByRole("button", { name: "Start" })).not.toHaveAttribute(
       "aria-keyshortcuts",
-      "p",
     );
   },
 };

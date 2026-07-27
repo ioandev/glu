@@ -7,6 +7,15 @@
   **deliberately outside the persisted partition** — auth status is server
   truth (the sealed cookie), never localStorage's. Semantics and all
   criteria unchanged; "provider" below reads as "store".
+- Amended: 2026-07-26 (ADR 39) — **the Tasks section lands**, second in the
+  list, between Todoist and Screen: one row, the "Limit the items in a section
+  to" ladder (10 / 20 / 50 / 100 / All, All by default). It is its own section
+  rather than a row under Todoist because that one is about the *account* and
+  this one is about the *list*. Surface only, and the skeleton absorbed it the
+  way this ADR promised: one `<section aria-label>`, ADR 28's field/ladder row
+  shape reused verbatim, one additive blob field (`sectionItemLimit`), no
+  version bump, no layout renegotiation. The penciled-sections list is
+  unchanged — this row was never on it.
 - Amended: 2026-07-25 — **the Screen section lands: the first of the four
   penciled rows** (owner brief: "add two buttons in settings: Stay awake on the
   website, Stay awake when the timer is running"). It discharges the
@@ -55,6 +64,57 @@
   favourite failure. The 44 px floor belongs on each rung's `<label>`, not on
   the text node inside it. Field rides the additive-blob pattern, no version
   bump.
+
+- Amended: 2026-07-26 — **the Alerts section lands, and it is the first one you
+  choose with your ears** (**ADR 40**: nine synthesized end-of-run sounds and a
+  Once / 3 / 5 / 10 / 20 s length). It discharges the *chime-selection* third of
+  the "alert volume/mute/chime · ADR 18" pencil; **volume and mute stay
+  penciled**. Fourth section, between Screen and Time comments, two rows, no
+  layout renegotiation, both fields on the additive-blob pattern with no version
+  bump — the skeleton held for the fourth time.
+
+  Three things worth recording for the sections still to come. **A row may have
+  a side effect**: every tap in this section plays the sound it is about, because
+  a preview that is not the artifact is ADR 27's lesson unlearned — which is only
+  safe because the section also owns the cancel rule (any tap stops the previous,
+  tapping the playing sound stops it, and the component's unmount effect is the
+  only "Settings was closed" signal it gets). **Nine choices outgrow a segmented
+  control**, so this is the first `radiogroup` built out of buttons: each carries
+  `role="radio"` + `aria-checked`, the group is named by its visible label, and a
+  roving tabindex with arrow keys replaces the keyboard behaviour a native radio
+  group would have given for free. And **an unlayered module class paints a
+  Mantine control in every state** (ADR 37), so the selected, playing and
+  focus-visible treatments are each restated rather than half-inherited.
+
+- Amended: 2026-07-26b — **the Alerts section gains a third row, and it is the
+  first row in this modal that two ADRs had to agree about** (**ADR 41**: the
+  session-end notification permission). It sits last, below ADR 40's sound grid
+  and length ladder, and the rule the two ADRs share is written in both:
+  *whichever ships first creates the section, the other appends*. ADR 40 got
+  there first; nothing was renegotiated.
+
+  **Amended the same day**: the row is a **switch** and it sits *first* in the
+  section, not last. It shipped as a button-or-sentence at the bottom and the
+  owner, having blocked notifications in the browser, could not find it — the
+  sentence said "blocked" without saying where the setting that unblocks it
+  lives, and the row itself sat below a nine-button grid in a scrolling modal.
+  Both are recorded in ADR 41.
+
+  Three things worth recording for the sections still to come. **A row that
+  reflects a permission still owes the user an off switch of GLU's own** — the
+  web cannot revoke a granted permission, so a control with only an on is not a
+  control; the app keeps its own boolean and the switch reads on only when both
+  halves agree. **An error is a row state, not a failure mode**: `.fieldError`
+  (accent-text ink, `role="alert"`) exists because "we cannot do that" is only
+  half an answer — the other half is where the user can. And **a row may read
+  something React cannot see**:
+  `Notification.permission` is a global with no binding and no reliable change
+  event, so it is consumed with `useSyncExternalStore` — the mount read is the
+  floor the row is correct against (the modal mounts on open, which covers
+  "changed it in browser settings, came back"), and `permissions.query` is a
+  best-effort subscription layered on top, absent or rejecting on several
+  engines. Anything future that reflects a browser capability should copy that
+  shape rather than an effect that copies a global into state.
 
 - Deviation (2026-07-24, implementation): the global-401 handler lives in the
   fetch layer (`src/lib/api.ts`) as a subscription the auth store registers, so
@@ -256,6 +316,14 @@ three retrofits this ADR just prevented.
 - [x] Its accessible name is the visible label alone (a `radiogroup`, named by the row's own label rather than by a duplicated `aria-label`).
 - [x] Picking a rung writes `commentThresholdMinutes` into the `glu:v2` blob and survives a reload with no version bump; a blob written before the field reads as 1 min, and an off-ladder value renders as 1 min rather than as nothing selected.
 - [x] The ladder is styled through chrome tokens in both schemes and all three directions — indicator on `--glu-accent`, active rung on `--glu-on-accent`, the rest on `--glu-muted` — and passes the a11y contrast gate.
+
+### Added by the 2026-07-26b amendment (ADR 41)
+
+- [x] The Alerts section **leads** with "Notify me when a session ends" — a ≥44 px switch above the sound grid and the length ladder, present from the first visit rather than appearing once the automatic asks run out. (It shipped last and moved the same day: unfindable down there.)
+- [x] It renders exactly one of four states — off and askable, on once granted, off with instructions naming the browser's site settings once denied, and disabled with an explanation where the API is absent — and its accessible name is the visible label alone.
+- [x] It turns off as well as on: GLU's own `notifyOnSessionEnd` silences the notification whatever the browser granted, and the switch reads on only when both halves agree.
+- [x] A grant made outside the app, while Settings is open, repaints the row without a remount (real Chromium; WebKit rides the mount read, which Playwright cannot flip mid-page).
+- [x] The row adds no colour of its own — `.fieldStatus` and the reused `.action`/`.field` classes read `--glu-*` only — and the section passes the a11y contrast gate in both schemes.
 
 ## Consequences
 

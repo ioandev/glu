@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useGluStore } from "@/store/gluStore";
 import { useTodoistAuth } from "@/store/todoistAuth";
-import type { TaskListResponse, TodoistSection, TodoistSource, UiTask } from "./types";
+import type { NamedItem, TaskListResponse, TodoistSection, TodoistSource, UiTask } from "./types";
 
 export type ListPhase = "idle" | "loading" | "ready" | "error";
 
@@ -12,6 +12,10 @@ export interface TodoistListState {
   phase: ListPhase;
   tasks: UiTask[];
   sections: TodoistSection[];
+  /** Only populated for filter/label sources — the project half of a
+   *  "<project> / <section>" header (ADR 12 amendment 2026-07-26). A project
+   *  source never needs this: it already knows its own name from `source`. */
+  projects: NamedItem[];
   truncated: boolean;
   cap: number;
   /** Todoist's own error text: filters are user-authored code, so a generic
@@ -37,6 +41,7 @@ export function useTodoistList(source: TodoistSource | null): TodoistListState {
     phase: "idle",
     tasks: [],
     sections: [],
+    projects: [],
     truncated: false,
     cap: 200,
     errorMessage: null,
@@ -59,6 +64,7 @@ export function useTodoistList(source: TodoistSource | null): TodoistListState {
         phase: "idle",
         tasks: [],
         sections: [],
+        projects: [],
         gone: false,
         refreshing: false,
       }));
@@ -91,14 +97,25 @@ export function useTodoistList(source: TodoistSource | null): TodoistListState {
           id: source.id,
           ...(source.query ? { query: source.query } : {}),
         });
-        const [list, sections] = await Promise.all([
+        // ADR 12 amendment 2026-07-26: fetched for every source type, not just
+        // projects — a filter/label result can carry sectioned tasks too, and
+        // the proxy already returns *every* section when `projectId` is
+        // omitted (Todoist's own unfiltered behaviour), so a project source is
+        // the only one that narrows the query.
+        const sectionsQuery =
+          source.type === "project" ? `?projectId=${encodeURIComponent(source.id)}` : "";
+        // Project names are only needed to build a filter/label header's
+        // "<project> / <section>" — a project source already has its own name.
+        const [list, sections, projects] = await Promise.all([
           apiFetch<TaskListResponse>(`/todoist/tasks?${query}`, { signal: controller.signal }),
+          apiFetch<{ items: TodoistSection[] }>(`/todoist/sections${sectionsQuery}`, {
+            signal: controller.signal,
+          }),
           source.type === "project"
-            ? apiFetch<{ items: TodoistSection[] }>(
-                `/todoist/sections?projectId=${encodeURIComponent(source.id)}`,
-                { signal: controller.signal },
-              )
-            : Promise.resolve({ items: [] as TodoistSection[] }),
+            ? Promise.resolve({ items: [] as NamedItem[] })
+            : apiFetch<{ items: NamedItem[] }>(`/todoist/projects`, {
+                signal: controller.signal,
+              }),
         ]);
 
         if (controller.signal.aborted) return;
@@ -106,6 +123,7 @@ export function useTodoistList(source: TodoistSource | null): TodoistListState {
           phase: "ready",
           tasks: list.items,
           sections: sections.items,
+          projects: projects.items,
           truncated: list.truncated,
           cap: list.cap,
           errorMessage: null,
