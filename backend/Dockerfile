@@ -4,7 +4,7 @@
 #   docker build -t glu-api backend/
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 # Copy manifests first so the dependency layer survives source-only changes.
 COPY package.json package-lock.json ./
@@ -17,12 +17,12 @@ RUN npm run build
 # Production dependencies only, resolved in their own stage: the build stage's
 # node_modules carries tsx, vitest, supertest and typescript-eslint, none of
 # which the running server needs.
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /deps
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:24-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 # Fixed UID/GID 5331 — matches the host deploy perms for glu-api (server-2-perms).
 # Replaces node:alpine's default `node` (uid 1000); GLU is stateless, mounts nothing.
