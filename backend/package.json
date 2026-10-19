@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "iron-session": "^8.0.4"
   },
   "devDependencies": {
@@ -22,11 +22,11 @@
     "@types/node": "^20",
     "@types/supertest": "^7.2.1",
     "eslint": "^9",
-    "eslint-plugin-security": "^4.0.1",
-    "supertest": "^7.2.2",
-    "tsx": "^4.23.1",
+    "eslint-plugin-security": "^4.2.0",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
     "typescript": "^5",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.71.2",
     "vitest": "^4.1.10"
   }
 }
